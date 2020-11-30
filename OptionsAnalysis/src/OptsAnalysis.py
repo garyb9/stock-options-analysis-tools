@@ -83,12 +83,17 @@ class OptsAnalysis:
             return
         locale.setlocale(locale.LC_ALL, 'en_US')
         x = self.bigDict[date]['calls']['Strike'].to_numpy().astype(float)
-        y = np.asarray([v.replace(",", "") for v in self.bigDict[date]['calls'][val]], dtype=np.int)
-        sumCalls = locale.format_string("%d", np.sum(y), grouping=True)
-        plt.bar(x, y, alpha=0.5, width=1.0, color='blue', label='Calls = ' + sumCalls)
-        y = np.asarray([v.replace(",", "") for v in self.bigDict[date]['puts'][val]], dtype=np.int)
-        sumPuts = locale.format_string("%d", np.sum(y), grouping=True)
-        plt.bar(x, y, alpha=0.5, width=1.0, color='red', label='Puts = ' + sumPuts)
+        yCalls = np.asarray([v.replace(",", "") for v in self.bigDict[date]['calls'][val]], dtype=np.int)
+        yPuts = np.asarray([v.replace(",", "") for v in self.bigDict[date]['puts'][val]], dtype=np.int)
+        sumCalls = np.sum(yCalls)
+        sumPuts = np.sum(yPuts)
+        strCalls = locale.format_string("%d", sumCalls, grouping=True)
+        strPuts = locale.format_string("%d", sumPuts, grouping=True)
+        perCalls = str(round(100 * float(sumCalls)/float(sumCalls + sumPuts), 2)) + '%'
+        perPuts = str(round(100 * float(sumPuts)/float(sumCalls + sumPuts), 2)) + '%'
+
+        plt.bar(x, yCalls, alpha=0.5, width=1.0, color='blue', label='Calls = ' + strCalls + ', ' + perCalls)
+        plt.bar(x, yPuts, alpha=0.5, width=1.0, color='red', label='Puts = ' + strPuts + ', ' + perPuts)
         plt.title(self.ticker + ' Options ' + val + ', Expiration Date - ' + date)
         plt.xlabel('Strike')
         plt.ylabel(val + ' Count')
@@ -104,25 +109,30 @@ class OptsAnalysis:
         putsDict = {}
         for key in self.bigDict.keys():
             x = self.bigDict[key]['calls']['Strike'].to_numpy().astype(float)
-            y = np.asarray([v.replace(",", "") for v in self.bigDict[key]['calls'][val]], dtype=np.int)
+            yCalls = np.asarray([v.replace(",", "") for v in self.bigDict[key]['calls'][val]], dtype=np.int)
             for i in range(len(x)):
                 if x[i] not in callsDict:
-                    callsDict[x[i]] = y[i]
+                    callsDict[x[i]] = yCalls[i]
                 else:
-                    callsDict[x[i]] += y[i]
+                    callsDict[x[i]] += yCalls[i]
             x = self.bigDict[key]['puts']['Strike'].to_numpy().astype(float)
-            y = np.asarray([v.replace(",", "") for v in self.bigDict[key]['puts'][val]], dtype=np.int)
+            yPuts = np.asarray([v.replace(",", "") for v in self.bigDict[key]['puts'][val]], dtype=np.int)
             for i in range(len(x)):
                 if x[i] not in putsDict:
-                    putsDict[x[i]] = y[i]
+                    putsDict[x[i]] = yPuts[i]
                 else:
-                    putsDict[x[i]] += y[i]
+                    putsDict[x[i]] += yPuts[i]
 
         locale.setlocale(locale.LC_ALL, 'en_US')
-        sumCalls = locale.format_string("%d", np.sum(list(callsDict.values())), grouping=True)
-        plt.bar(callsDict.keys(), callsDict.values(), alpha=0.5, width=1.0, color='blue', label='Calls = ' + sumCalls)
-        sumPuts = locale.format_string("%d", np.sum(list(putsDict.values())), grouping=True)
-        plt.bar(putsDict.keys(), putsDict.values(), alpha=0.5, width=1.0, color='red', label='Puts = ' + sumPuts)
+        sumCalls = np.sum(list(callsDict.values()))
+        sumPuts = np.sum(list(putsDict.values()))
+        strCalls = locale.format_string("%d", sumCalls, grouping=True)
+        strPuts = locale.format_string("%d", sumPuts, grouping=True)
+        perCalls = str(round(100 * float(sumCalls) / float(sumCalls + sumPuts), 2)) + '%'
+        perPuts = str(round(100 * float(sumPuts) / float(sumCalls + sumPuts), 2)) + '%'
+
+        plt.bar(callsDict.keys(), callsDict.values(), alpha=0.5, width=1.0, color='blue', label='Calls = ' + strCalls + ', ' + perCalls)
+        plt.bar(putsDict.keys(), putsDict.values(), alpha=0.5, width=1.0, color='red', label='Puts = ' + strPuts + ', ' + perPuts)
         plt.title(self.ticker + ' Options ' + val + ', All Expiration Dates')
         plt.xlabel('Strike')
         plt.ylabel(val + ' Count')
@@ -136,14 +146,19 @@ class OptsAnalysis:
             return
         locale.setlocale(locale.LC_ALL, 'en_US')
         x = self.bigDict[date]['calls']['Strike'].to_numpy().astype(float)
-        y = np.asarray([v.replace(",", "") for v in self.bigDict[date]['calls']['Volume']], dtype=np.int)
-        z = np.asarray([v.replace(",", "") for v in self.bigDict[date]['calls']['Open Int']], dtype=np.int)
-        sumCalls = locale.format_string("%d", np.sum(y) + np.sum(z), grouping=True)
-        plt.bar(x, y + z, alpha=0.5, width=1.0, color='blue', label='Calls = ' + sumCalls)
-        y = np.asarray([v.replace(",", "") for v in self.bigDict[date]['puts']['Volume']], dtype=np.int)
-        z = np.asarray([v.replace(",", "") for v in self.bigDict[date]['puts']['Open Int']], dtype=np.int)
-        sumPuts = locale.format_string("%d", np.sum(y) + np.sum(z), grouping=True)
-        plt.bar(x, y + z, alpha=0.5, width=1.0, color='red', label='Puts = ' + sumPuts)
+        yCalls = np.asarray([v.replace(",", "") for v in self.bigDict[date]['calls']['Volume']], dtype=np.int)
+        zCalls = np.asarray([v.replace(",", "") for v in self.bigDict[date]['calls']['Open Int']], dtype=np.int)
+        yPuts = np.asarray([v.replace(",", "") for v in self.bigDict[date]['puts']['Volume']], dtype=np.int)
+        zPuts = np.asarray([v.replace(",", "") for v in self.bigDict[date]['puts']['Open Int']], dtype=np.int)
+        sumCalls = np.sum(yCalls) + np.sum(zCalls)
+        sumPuts = np.sum(yPuts) + np.sum(zPuts)
+        strCalls = locale.format_string("%d", sumCalls, grouping=True)
+        strPuts = locale.format_string("%d", sumPuts, grouping=True)
+        perCalls = str(round(100 * float(sumCalls) / float(sumCalls + sumPuts), 2)) + '%'
+        perPuts = str(round(100 * float(sumPuts) / float(sumCalls + sumPuts), 2)) + '%'
+
+        plt.bar(x, yCalls + zCalls, alpha=0.5, width=1.0, color='blue', label='Calls = ' + strCalls + ', ' + perCalls)
+        plt.bar(x, yPuts + zPuts, alpha=0.5, width=1.0, color='red', label='Puts = ' + strPuts + ', ' + perPuts)
         plt.title(self.ticker + ' Options Volume and Open Interest, Expiration Date - ' + date)
         plt.xlabel('Strike')
         plt.ylabel('Volume and Open Interest Count')
@@ -155,27 +170,32 @@ class OptsAnalysis:
         putsDict = {}
         for key in self.bigDict.keys():
             x = self.bigDict[key]['calls']['Strike'].to_numpy().astype(float)
-            y = np.asarray([v.replace(",", "") for v in self.bigDict[key]['calls']['Volume']], dtype=np.int)
-            z = np.asarray([v.replace(",", "") for v in self.bigDict[key]['calls']['Open Int']], dtype=np.int)
+            yCalls = np.asarray([v.replace(",", "") for v in self.bigDict[key]['calls']['Volume']], dtype=np.int)
+            zCalls = np.asarray([v.replace(",", "") for v in self.bigDict[key]['calls']['Open Int']], dtype=np.int)
             for i in range(len(x)):
                 if x[i] not in callsDict:
-                    callsDict[x[i]] = y[i] + z[i]
+                    callsDict[x[i]] = yCalls[i] + zCalls[i]
                 else:
-                    callsDict[x[i]] += y[i] + z[i]
+                    callsDict[x[i]] += yCalls[i] + zCalls[i]
             x = self.bigDict[key]['puts']['Strike'].to_numpy().astype(float)
-            y = np.asarray([v.replace(",", "") for v in self.bigDict[key]['puts']['Volume']], dtype=np.int)
-            z = np.asarray([v.replace(",", "") for v in self.bigDict[key]['puts']['Open Int']], dtype=np.int)
+            yPuts = np.asarray([v.replace(",", "") for v in self.bigDict[key]['puts']['Volume']], dtype=np.int)
+            zPuts = np.asarray([v.replace(",", "") for v in self.bigDict[key]['puts']['Open Int']], dtype=np.int)
             for i in range(len(x)):
                 if x[i] not in putsDict:
-                    putsDict[x[i]] = y[i] + z[i]
+                    putsDict[x[i]] = yPuts[i] + zPuts[i]
                 else:
-                    putsDict[x[i]] += y[i] + z[i]
+                    putsDict[x[i]] += yPuts[i] + zPuts[i]
 
         locale.setlocale(locale.LC_ALL, 'en_US')
-        sumCalls = locale.format_string("%d", np.sum(list(callsDict.values())), grouping=True)
-        plt.bar(callsDict.keys(), callsDict.values(), alpha=0.5, width=1.0, color='blue', label='Calls = ' + sumCalls)
-        sumPuts = locale.format_string("%d", np.sum(list(putsDict.values())), grouping=True)
-        plt.bar(putsDict.keys(), putsDict.values(), alpha=0.5, width=1.0, color='red', label='Puts = ' + sumPuts)
+        sumCalls = np.sum(list(callsDict.values()))
+        sumPuts = np.sum(list(putsDict.values()))
+        strCalls = locale.format_string("%d", sumCalls, grouping=True)
+        strPuts = locale.format_string("%d", sumPuts, grouping=True)
+        perCalls = str(round(100 * float(sumCalls) / float(sumCalls + sumPuts), 2)) + '%'
+        perPuts = str(round(100 * float(sumPuts) / float(sumCalls + sumPuts), 2)) + '%'
+
+        plt.bar(callsDict.keys(), callsDict.values(), alpha=0.5, width=1.0, color='blue', label='Calls = ' + strCalls + ', ' + perCalls)
+        plt.bar(putsDict.keys(), putsDict.values(), alpha=0.5, width=1.0, color='red', label='Puts = ' + strPuts + ', ' + perPuts)
         plt.title(self.ticker + ' Options Volume + Open Interest, All Expiration Dates')
         plt.xlabel('Strike')
         plt.ylabel('Volume + Open Interest Count')
