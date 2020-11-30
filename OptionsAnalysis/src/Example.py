@@ -3,7 +3,7 @@ from OptsAnalysis import OptsAnalysis
 
 # PLTR (Palantir) example
 filePath = r'../data/pltr.xls'
-Opts = OptsAnalysis("PLTR", filePath)
+Opts = OptsAnalysis(filePath)
 print(Opts.ticker + " Expiration Dates available:")
 expDates = Opts.GetExpirationDates()
 print(expDates)
@@ -17,7 +17,7 @@ Opts.PlotVolumeOpenIntHistCumulative()
 
 # NIO (Palantir) example
 filePath = r'../data/nio.xls'
-Opts = OptsAnalysis("NIO", filePath)
+Opts = OptsAnalysis(filePath)
 print(Opts.ticker + " Expiration Dates available:")
 expDates = Opts.GetExpirationDates()
 print(expDates)

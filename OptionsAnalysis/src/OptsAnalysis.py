@@ -11,7 +11,7 @@ class OptsAnalysis:
        Disclaimer - only supports TradeStation formatting of option spreads!
     """
 
-    def __init__(self, ticker, filePath):
+    def __init__(self, filePath):
         """Constructor for the :class:`OptsAnalysis` class.
             File should be called in the format:
             <ticker>.[xls, xlsx, csv]
@@ -25,7 +25,7 @@ class OptsAnalysis:
                         keeping calls on the left to strike price puts on the right
                     """
                     try:
-                        ticker = self.filePath.split('/')[-1].split('.')[0]
+                        ticker = self.filePath.split('/')[-1].split("\\")[-1].split('.')[0]
                         self.ticker = str(ticker).strip().upper().lstrip("0")
                     except:
                         print("Bad file name format, please provide in the format: <ticker>.[xls, xlsx, csv]")
