@@ -4,12 +4,16 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import locale
-
+import enum
 
 class OptsAnalysis:
     """A :class:`OptsAnalysis` object.
        Disclaimer - only supports TradeStation formatting of option spreads!
     """
+    class Values(enum.Enum):
+        Both = 0
+        Volume = 1
+        OpenInt = 2
 
     def __init__(self, filePath):
         """Constructor for the :class:`OptsAnalysis` class.
@@ -31,7 +35,7 @@ class OptsAnalysis:
                         print("Bad file name format, please provide in the format: <ticker>.[xls, xlsx, csv]")
                         return
                     tempDF = pd.DataFrame(pd.read_excel(self.filePath).values)
-                    firstRow = list(tempDF.iloc[0])
+                    firstRow = [x.replace(" ", "") for x in list(tempDF.iloc[0])]
                     strikeIndex = [x.lower() for x in firstRow].index('strike')  # middle of the pack
                     dates = []
                     indexes = []
@@ -71,20 +75,38 @@ class OptsAnalysis:
     def GetExpirationDates(self):
         return list(self.bigDict.keys())
 
-    def PlotHistByDate(self, date, val):
+    def GetValuesString(self, val):
+        if val == self.Values.Both or val == "Both":
+            return "Volume and Open Interest"
+        elif val == self.Values.Volume or val == "Volume":
+            return "Volume"
+        elif val == self.Values.OpenInt or val == "OpenInt":
+            return "Open Interest"
+        else:
+            return
+
+    def PlotHistByDate(self, date, val=Values.Both):
         """ date format example = 27 Nov 20
             val = Volume or Open Int
         """
         if date not in self.bigDict:
             print("Date given not in available expiration dates:", self.GetExpirationDates())
             return
-        if val not in ['Volume', 'Open Int']:
-            print("Value given is not Volume or Open Int:")
+        if val not in self.Values.__members__:
+            print("Value given is not a part of Values class")
             return
         locale.setlocale(locale.LC_ALL, 'en_US')
         x = self.bigDict[date]['calls']['Strike'].to_numpy().astype(float)
-        yCalls = np.asarray([v.replace(",", "") for v in self.bigDict[date]['calls'][val]], dtype=np.int)
-        yPuts = np.asarray([v.replace(",", "") for v in self.bigDict[date]['puts'][val]], dtype=np.int)
+
+        if val == self.Values.Both or val == "Both":
+            yCalls = np.asarray([v.replace(",", "") for v in self.bigDict[date]['calls']['Volume']], dtype=np.int) \
+                + np.asarray([v.replace(",", "") for v in self.bigDict[date]['calls']['OpenInt']], dtype=np.int)
+            yPuts = np.asarray([v.replace(",", "") for v in self.bigDict[date]['puts']['Volume']], dtype=np.int) \
+                + np.asarray([v.replace(",", "") for v in self.bigDict[date]['puts']['OpenInt']], dtype=np.int)
+        else:
+            yCalls = np.asarray([v.replace(",", "") for v in self.bigDict[date]['calls'][val]], dtype=np.int)
+            yPuts = np.asarray([v.replace(",", "") for v in self.bigDict[date]['puts'][val]], dtype=np.int)
+
         sumCalls = np.sum(yCalls)
         sumPuts = np.sum(yPuts)
         strCalls = locale.format_string("%d", sumCalls, grouping=True)
@@ -94,29 +116,38 @@ class OptsAnalysis:
 
         plt.bar(x, yCalls, alpha=0.5, width=1.0, color='blue', label='Calls = ' + strCalls + ', ' + perCalls)
         plt.bar(x, yPuts, alpha=0.5, width=1.0, color='red', label='Puts = ' + strPuts + ', ' + perPuts)
-        plt.title(self.ticker + ' Options ' + val + ', Expiration Date - ' + date)
+        plt.title(self.ticker + ' Options ' + self.GetValuesString(val) + ', Expiration Date - ' + date)
         plt.xlabel('Strike')
-        plt.ylabel(val + ' Count')
+        plt.ylabel(self.GetValuesString(val) + ' Count')
         plt.legend(loc='upper left')
         plt.show()
 
     def PlotHistCumulative(self, val):
         """ val = Volume or Open Int """
-        if val not in ['Volume', 'Open Int']:
-            print("Value given is not Volume or Open Int:")
+        if val not in self.Values.__members__:
+            print("Value given is not a part of Values class")
             return
         callsDict = {}
         putsDict = {}
         for key in self.bigDict.keys():
             x = self.bigDict[key]['calls']['Strike'].to_numpy().astype(float)
-            yCalls = np.asarray([v.replace(",", "") for v in self.bigDict[key]['calls'][val]], dtype=np.int)
+            if val == self.Values.Both or val == "Both":
+                yCalls = np.asarray([v.replace(",", "") for v in self.bigDict[key]['calls']['Volume']], dtype=np.int) \
+                    + np.asarray([v.replace(",", "") for v in self.bigDict[key]['calls']['OpenInt']], dtype=np.int)
+            else:
+                yCalls = np.asarray([v.replace(",", "") for v in self.bigDict[key]['calls'][val]], dtype=np.int)
             for i in range(len(x)):
                 if x[i] not in callsDict:
                     callsDict[x[i]] = yCalls[i]
                 else:
                     callsDict[x[i]] += yCalls[i]
+
             x = self.bigDict[key]['puts']['Strike'].to_numpy().astype(float)
-            yPuts = np.asarray([v.replace(",", "") for v in self.bigDict[key]['puts'][val]], dtype=np.int)
+            if val == self.Values.Both or val == "Both":
+                yPuts = np.asarray([v.replace(",", "") for v in self.bigDict[key]['puts']['Volume']], dtype=np.int) \
+                    + np.asarray([v.replace(",", "") for v in self.bigDict[key]['puts']['OpenInt']], dtype=np.int)
+            else:
+                yPuts = np.asarray([v.replace(",", "") for v in self.bigDict[key]['puts'][val]], dtype=np.int)
             for i in range(len(x)):
                 if x[i] not in putsDict:
                     putsDict[x[i]] = yPuts[i]
@@ -133,71 +164,8 @@ class OptsAnalysis:
 
         plt.bar(callsDict.keys(), callsDict.values(), alpha=0.5, width=1.0, color='blue', label='Calls = ' + strCalls + ', ' + perCalls)
         plt.bar(putsDict.keys(), putsDict.values(), alpha=0.5, width=1.0, color='red', label='Puts = ' + strPuts + ', ' + perPuts)
-        plt.title(self.ticker + ' Options ' + val + ', All Expiration Dates')
+        plt.title(self.ticker + ' Options ' + self.GetValuesString(val) + ', All Expiration Dates')
         plt.xlabel('Strike')
-        plt.ylabel(val + ' Count')
-        plt.legend(loc='upper left')
-        plt.show()
-
-    def PlotVolumeOpenIntHistByDate(self, date):
-        """ date format example = 27 Nov 20 """
-        if date not in self.bigDict:
-            print("Date given not in available expiration dates:", self.GetExpirationDates())
-            return
-        locale.setlocale(locale.LC_ALL, 'en_US')
-        x = self.bigDict[date]['calls']['Strike'].to_numpy().astype(float)
-        yCalls = np.asarray([v.replace(",", "") for v in self.bigDict[date]['calls']['Volume']], dtype=np.int)
-        zCalls = np.asarray([v.replace(",", "") for v in self.bigDict[date]['calls']['Open Int']], dtype=np.int)
-        yPuts = np.asarray([v.replace(",", "") for v in self.bigDict[date]['puts']['Volume']], dtype=np.int)
-        zPuts = np.asarray([v.replace(",", "") for v in self.bigDict[date]['puts']['Open Int']], dtype=np.int)
-        sumCalls = np.sum(yCalls) + np.sum(zCalls)
-        sumPuts = np.sum(yPuts) + np.sum(zPuts)
-        strCalls = locale.format_string("%d", sumCalls, grouping=True)
-        strPuts = locale.format_string("%d", sumPuts, grouping=True)
-        perCalls = str(round(100 * float(sumCalls) / float(sumCalls + sumPuts), 2)) + '%'
-        perPuts = str(round(100 * float(sumPuts) / float(sumCalls + sumPuts), 2)) + '%'
-
-        plt.bar(x, yCalls + zCalls, alpha=0.5, width=1.0, color='blue', label='Calls = ' + strCalls + ', ' + perCalls)
-        plt.bar(x, yPuts + zPuts, alpha=0.5, width=1.0, color='red', label='Puts = ' + strPuts + ', ' + perPuts)
-        plt.title(self.ticker + ' Options Volume and Open Interest, Expiration Date - ' + date)
-        plt.xlabel('Strike')
-        plt.ylabel('Volume and Open Interest Count')
-        plt.legend(loc='upper left')
-        plt.show()
-
-    def PlotVolumeOpenIntHistCumulative(self):
-        callsDict = {}
-        putsDict = {}
-        for key in self.bigDict.keys():
-            x = self.bigDict[key]['calls']['Strike'].to_numpy().astype(float)
-            yCalls = np.asarray([v.replace(",", "") for v in self.bigDict[key]['calls']['Volume']], dtype=np.int)
-            zCalls = np.asarray([v.replace(",", "") for v in self.bigDict[key]['calls']['Open Int']], dtype=np.int)
-            for i in range(len(x)):
-                if x[i] not in callsDict:
-                    callsDict[x[i]] = yCalls[i] + zCalls[i]
-                else:
-                    callsDict[x[i]] += yCalls[i] + zCalls[i]
-            x = self.bigDict[key]['puts']['Strike'].to_numpy().astype(float)
-            yPuts = np.asarray([v.replace(",", "") for v in self.bigDict[key]['puts']['Volume']], dtype=np.int)
-            zPuts = np.asarray([v.replace(",", "") for v in self.bigDict[key]['puts']['Open Int']], dtype=np.int)
-            for i in range(len(x)):
-                if x[i] not in putsDict:
-                    putsDict[x[i]] = yPuts[i] + zPuts[i]
-                else:
-                    putsDict[x[i]] += yPuts[i] + zPuts[i]
-
-        locale.setlocale(locale.LC_ALL, 'en_US')
-        sumCalls = np.sum(list(callsDict.values()))
-        sumPuts = np.sum(list(putsDict.values()))
-        strCalls = locale.format_string("%d", sumCalls, grouping=True)
-        strPuts = locale.format_string("%d", sumPuts, grouping=True)
-        perCalls = str(round(100 * float(sumCalls) / float(sumCalls + sumPuts), 2)) + '%'
-        perPuts = str(round(100 * float(sumPuts) / float(sumCalls + sumPuts), 2)) + '%'
-
-        plt.bar(callsDict.keys(), callsDict.values(), alpha=0.5, width=1.0, color='blue', label='Calls = ' + strCalls + ', ' + perCalls)
-        plt.bar(putsDict.keys(), putsDict.values(), alpha=0.5, width=1.0, color='red', label='Puts = ' + strPuts + ', ' + perPuts)
-        plt.title(self.ticker + ' Options Volume + Open Interest, All Expiration Dates')
-        plt.xlabel('Strike')
-        plt.ylabel('Volume + Open Interest Count')
+        plt.ylabel(self.GetValuesString(val) + ' Count')
         plt.legend(loc='upper left')
         plt.show()

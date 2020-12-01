@@ -9,13 +9,13 @@ expDates = Opts.GetExpirationDates()
 print(expDates)
 
 Opts.PlotHistByDate(expDates[0], 'Volume')
-Opts.PlotHistByDate(expDates[0], 'Open Int')
-Opts.PlotVolumeOpenIntHistByDate(expDates[0])
+Opts.PlotHistByDate(expDates[0], 'OpenInt')
+Opts.PlotHistByDate(expDates[0], 'Both')
 Opts.PlotHistCumulative('Volume')
-Opts.PlotHistCumulative('Open Int')
-Opts.PlotVolumeOpenIntHistCumulative()
+Opts.PlotHistCumulative('OpenInt')
+Opts.PlotHistCumulative('Both')
 
-# NIO (Palantir) example
+# NIO example
 filePath = r'../data/nio.xls'
 Opts = OptsAnalysis(filePath)
 print(Opts.ticker + " Expiration Dates available:")
@@ -23,8 +23,8 @@ expDates = Opts.GetExpirationDates()
 print(expDates)
 
 Opts.PlotHistByDate(expDates[0], 'Volume')
-Opts.PlotHistByDate(expDates[0], 'Open Int')
-Opts.PlotVolumeOpenIntHistByDate(expDates[0])
+Opts.PlotHistByDate(expDates[0], 'OpenInt')
+Opts.PlotHistByDate(expDates[0], 'Both')
 Opts.PlotHistCumulative('Volume')
-Opts.PlotHistCumulative('Open Int')
-Opts.PlotVolumeOpenIntHistCumulative()
+Opts.PlotHistCumulative('OpenInt')
+Opts.PlotHistCumulative('Both')

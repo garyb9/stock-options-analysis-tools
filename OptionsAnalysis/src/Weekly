@@ -11,5 +11,5 @@ for file in os.listdir(dataDir):
         expDates = Opts.GetExpirationDates()
         print(expDates)
         Opts.PlotHistByDate(expDates[0], 'Volume')
-        Opts.PlotHistByDate(expDates[0], 'Open Int')
-        Opts.PlotVolumeOpenIntHistByDate(expDates[0])
+        Opts.PlotHistByDate(expDates[0], 'OpenInt')
+        Opts.PlotHistByDate(expDates[0], 'Both')
