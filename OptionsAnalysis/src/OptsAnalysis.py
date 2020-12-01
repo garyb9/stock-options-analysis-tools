@@ -115,7 +115,6 @@ class OptsAnalysis:
         perPuts = str(round(100 * float(sumPuts)/float(sumCalls + sumPuts), 2)) + '%'
 
         mean = 0
-        std = 0
         var = 0
         allOptions = {}
         for idx, strike in enumerate(x):
@@ -184,7 +183,6 @@ class OptsAnalysis:
         perPuts = str(round(100 * float(sumPuts) / float(sumCalls + sumPuts), 2)) + '%'
 
         mean = 0
-        std = 0
         var = 0
         allOptions = {}
         for idx, strike in enumerate(list(callsDict.keys())):
