@@ -114,8 +114,29 @@ class OptsAnalysis:
         perCalls = str(round(100 * float(sumCalls)/float(sumCalls + sumPuts), 2)) + '%'
         perPuts = str(round(100 * float(sumPuts)/float(sumCalls + sumPuts), 2)) + '%'
 
+        mean = 0
+        std = 0
+        var = 0
+        allOptions = {}
+        for idx, strike in enumerate(x):
+            allOptions[strike] = yCalls[idx] + yPuts[idx]
+
+        for strike in list(allOptions.keys()):
+            mean += float(strike * allOptions[strike])
+            var += np.power(float(strike * allOptions[strike]), 2)
+        mean /= float(sumCalls + sumPuts)
+        var /= np.power(float(sumCalls + sumPuts), 2)
+        std = np.sqrt(var)
+        printStatsStr = "---- " + self.ticker + ' Options ' + self.GetValuesString(val) + " Stats ----"
+        print(printStatsStr)
+        print("\tMean:\t\t", "%.2f" % mean)
+        print("\tVariance:\t", "%.2f" % var)
+        print("\tSTD:\t\t", "%.2f" % std)
+        print("-" * len(printStatsStr))
+
         plt.bar(x, yCalls, alpha=0.5, width=1.0, color='blue', label='Calls = ' + strCalls + ', ' + perCalls)
         plt.bar(x, yPuts, alpha=0.5, width=1.0, color='red', label='Puts = ' + strPuts + ', ' + perPuts)
+        plt.plot([], [], color='black', label="Mean = " + "%.2f" % mean + ', STD = ±' + "%.2f" % std)
         plt.title(self.ticker + ' Options ' + self.GetValuesString(val) + ', Expiration Date - ' + date)
         plt.xlabel('Strike')
         plt.ylabel(self.GetValuesString(val) + ' Count')
@@ -162,8 +183,29 @@ class OptsAnalysis:
         perCalls = str(round(100 * float(sumCalls) / float(sumCalls + sumPuts), 2)) + '%'
         perPuts = str(round(100 * float(sumPuts) / float(sumCalls + sumPuts), 2)) + '%'
 
+        mean = 0
+        std = 0
+        var = 0
+        allOptions = {}
+        for idx, strike in enumerate(list(callsDict.keys())):
+            allOptions[strike] = list(callsDict.values())[idx] + list(putsDict.values())[idx]
+
+        for strike in list(allOptions.keys()):
+            mean += float(strike * allOptions[strike])
+            var += np.power(float(strike * allOptions[strike]), 2)
+        mean /= float(sumCalls + sumPuts)
+        var /= np.power(float(sumCalls + sumPuts), 2)
+        std = np.sqrt(var)
+        printStatsStr = "---- " + self.ticker + ' Options ' + self.GetValuesString(val) + " Stats ----"
+        print(printStatsStr)
+        print("\tMean:\t\t", "%.2f" % mean)
+        print("\tVariance:\t", "%.2f" % var)
+        print("\tSTD:\t\t", "%.2f" % std)
+        print("-" * len(printStatsStr))
+
         plt.bar(callsDict.keys(), callsDict.values(), alpha=0.5, width=1.0, color='blue', label='Calls = ' + strCalls + ', ' + perCalls)
         plt.bar(putsDict.keys(), putsDict.values(), alpha=0.5, width=1.0, color='red', label='Puts = ' + strPuts + ', ' + perPuts)
+        plt.plot([], [], color='black', label="Mean = " + "%.2f" % mean + ', STD = ±' + "%.2f" % std)
         plt.title(self.ticker + ' Options ' + self.GetValuesString(val) + ', All Expiration Dates')
         plt.xlabel('Strike')
         plt.ylabel(self.GetValuesString(val) + ' Count')
