@@ -65,6 +65,8 @@ class OptsAnalysis:
 
                         self.bigDict[val] = {'calls': calls, 'puts': puts}
 
+                    self.Dates = list(self.bigDict.keys())
+
                 else:
                     raise Exception("Only excel files or csv files are allowed")
             else:
@@ -73,7 +75,7 @@ class OptsAnalysis:
             raise Exception("No file given")
 
     def GetExpirationDates(self):
-        return list(self.bigDict.keys())
+        return self.Dates
 
     def GetValuesString(self, val):
         if val == self.Values.Both or val == "Both":
@@ -84,6 +86,78 @@ class OptsAnalysis:
             return "Open Interest"
         else:
             return
+
+    def Plot(self, val=Values.Both, start_date=None, end_date=None, allOptions=None, allCalls=None, allPuts=None):
+        if start_date is None or end_date is None or allOptions is None or allCalls is None or allPuts is None:
+            return
+
+        mean = 0; meanCalls = 0; meanPuts = 0
+        std = 0; stdCalls = 0; stdPuts = 0
+
+        for strike in list(allOptions.keys()):
+            meanCalls += float(strike * allCalls[strike])
+            meanPuts += float(strike * allPuts[strike])
+            mean += float(strike * allOptions[strike])
+
+            stdCalls += np.power(float(strike * allCalls[strike]), 2)
+            stdPuts += np.power(float(strike * allPuts[strike]), 2)
+            std += np.power(float(strike * allOptions[strike]), 2)
+
+        sumCalls = np.sum(list(allCalls.values()))
+        sumPuts = np.sum(list(allPuts.values()))
+        sumOverall = sumCalls+sumPuts
+
+        meanCalls /= float(sumCalls)
+        meanPuts /= float(sumPuts)
+        mean /= float(sumCalls + sumPuts)
+
+        stdCalls = np.sqrt(std / np.power(float(sumCalls), 2))
+        stdPuts = np.sqrt(std / np.power(float(sumPuts), 2))
+        std = np.sqrt(std / np.power(float(sumOverall), 2))
+
+        perCalls = str(round(100 * float(sumCalls) / float(sumOverall), 2)) + '%'
+        perPuts = str(round(100 * float(sumPuts) / float(sumOverall), 2)) + '%'
+
+        printStatsStr = "---- " + self.ticker + ' Options ' + self.GetValuesString(val) + " Stats ----"
+
+        locale.setlocale(locale.LC_ALL, 'en_US')
+        strCalls = locale.format_string("%d", sumCalls, grouping=True)
+        strPuts = locale.format_string("%d", sumPuts, grouping=True)
+        strOverall = locale.format_string("%d", sumOverall, grouping=True)
+        widthStr = str(max([len(strCalls), len(strPuts), len(strOverall)]))
+        strCalls = '{:<{width}}'.format(strCalls, width=widthStr)
+        strPuts = '{:<{width}}'.format(strPuts, width=widthStr)
+        strOverall = '{:<{width}}'.format(strOverall, width=widthStr)
+
+        printCallsStr = "Calls:\t" + strCalls + " | Mean = " + "%.2f" % meanCalls + " | STD = ±" + "%.2f" % stdCalls + " | " + perCalls
+        printPutsStr = "Puts:\t" + strPuts + " | Mean = " + "%.2f" % meanPuts + " | STD = ±" + "%.2f" % stdPuts + " | " + perPuts
+        printAllStr = "All:\t" + strOverall + " | Mean = " + "%.2f" % mean + " | STD = ±" + "%.2f" % std
+
+        start = self.Dates.index(start_date)
+        end = self.Dates.index(end_date)
+
+        if start_date == self.Dates[0] and end_date == self.Dates[-1]:
+            printExpDatesStr = "All Expiration Dates"
+        elif start_date == end_date:
+            printExpDatesStr = "Expiring at " + self.Dates[start]
+        else:
+            printExpDatesStr = "Expiring From " + self.Dates[start] + " Up To " + self.Dates[end]
+
+        print(printStatsStr)
+        print("\t", printAllStr)
+        print("\t", printCallsStr)
+        print("\t", printPutsStr)
+        print("-" * len(printStatsStr))
+
+        plt.bar(allCalls.keys(), allCalls.values(), alpha=0.5, width=1.0, color='blue', label=printCallsStr.replace("\t", " ").replace(" |", ","))
+        plt.bar(allPuts.keys(), allPuts.values(), alpha=0.5, width=1.0, color='red', label=printPutsStr.replace("\t", " ").replace(" |", ","))
+        plt.plot([], [], color='black', label=printAllStr.replace("\t", " ").replace(" |", ","))
+
+        plt.title(self.ticker + ' Options ' + self.GetValuesString(val) + ", " + printExpDatesStr)
+        plt.xlabel('Strike')
+        plt.ylabel(self.GetValuesString(val) + ' Count')
+        plt.legend(loc='upper left')
+        plt.show()
 
     def PlotHistByDate(self, date, val=Values.Both):
         """ date format example = 27 Nov 20
@@ -107,60 +181,55 @@ class OptsAnalysis:
             yCalls = np.asarray([v.replace(",", "") for v in self.bigDict[date]['calls'][val]], dtype=np.int)
             yPuts = np.asarray([v.replace(",", "") for v in self.bigDict[date]['puts'][val]], dtype=np.int)
 
-        sumCalls = np.sum(yCalls)
-        sumPuts = np.sum(yPuts)
-        strCalls = locale.format_string("%d", sumCalls, grouping=True)
-        strPuts = locale.format_string("%d", sumPuts, grouping=True)
-        perCalls = str(round(100 * float(sumCalls)/float(sumCalls + sumPuts), 2)) + '%'
-        perPuts = str(round(100 * float(sumPuts)/float(sumCalls + sumPuts), 2)) + '%'
-
-        mean = 0
-        var = 0
-        allOptions = {}
+        allOptions = {}; allCalls = {}; allPuts = {}
         for idx, strike in enumerate(x):
+            allCalls[strike] = yCalls[idx]
+            allPuts[strike] = yPuts[idx]
             allOptions[strike] = yCalls[idx] + yPuts[idx]
 
-        for strike in list(allOptions.keys()):
-            mean += float(strike * allOptions[strike])
-            var += np.power(float(strike * allOptions[strike]), 2)
-        mean /= float(sumCalls + sumPuts)
-        var /= np.power(float(sumCalls + sumPuts), 2)
-        std = np.sqrt(var)
-        printStatsStr = "---- " + self.ticker + ' Options ' + self.GetValuesString(val) + " Stats ----"
-        print(printStatsStr)
-        print("\tMean:\t\t", "%.2f" % mean)
-        print("\tVariance:\t", "%.2f" % var)
-        print("\tSTD:\t\t", "%.2f" % std)
-        print("-" * len(printStatsStr))
+        self.Plot(val=val, start_date=date, end_date=date, allOptions=allOptions, allCalls=allCalls, allPuts=allPuts)
 
-        plt.bar(x, yCalls, alpha=0.5, width=1.0, color='blue', label='Calls = ' + strCalls + ', ' + perCalls)
-        plt.bar(x, yPuts, alpha=0.5, width=1.0, color='red', label='Puts = ' + strPuts + ', ' + perPuts)
-        plt.plot([], [], color='black', label="Mean = " + "%.2f" % mean + ', STD = ±' + "%.2f" % std)
-        plt.title(self.ticker + ' Options ' + self.GetValuesString(val) + ', Expiration Date - ' + date)
-        plt.xlabel('Strike')
-        plt.ylabel(self.GetValuesString(val) + ' Count')
-        plt.legend(loc='upper left')
-        plt.show()
-
-    def PlotHistCumulative(self, val):
-        """ val = Volume or Open Int """
+    def PlotHist(self, val=Values.Both, start_date=None, end_date=None):
+        """ val = Volume, OpenInt or Both
+            start_date = one of available expiration dates
+            end_Date = one of available expiration dates, must be later than start_date
+        """
         if val not in self.Values.__members__:
             print("Value given is not a part of Values class")
             return
-        callsDict = {}
-        putsDict = {}
-        for key in self.bigDict.keys():
+
+        if start_date is not None:
+            if start_date not in self.Dates:
+                print("Start Date given not in available expiration dates:", self.Dates)
+                return
+        else:
+            start_date = self.Dates[0]
+
+        if end_date is not None:
+            if  end_date not in self.Dates:
+                print("End Date given not in available expiration dates:", self.Dates)
+                return
+        else:
+            end_date = self.Dates[-1]
+
+        start = self.Dates.index(start_date)
+        end = self.Dates.index(end_date)
+        if start > end:
+            print("End Date given should be equal or before Start Date")
+            return
+
+        allOptions = {}; allCalls = {}; allPuts = {}
+        for key in self.Dates[start:end]:
             x = self.bigDict[key]['calls']['Strike'].to_numpy().astype(float)
             if val == self.Values.Both or val == "Both":
                 yCalls = np.asarray([v.replace(",", "") for v in self.bigDict[key]['calls']['Volume']], dtype=np.int) \
                     + np.asarray([v.replace(",", "") for v in self.bigDict[key]['calls']['OpenInt']], dtype=np.int)
             else:
                 yCalls = np.asarray([v.replace(",", "") for v in self.bigDict[key]['calls'][val]], dtype=np.int)
+
             for i in range(len(x)):
-                if x[i] not in callsDict:
-                    callsDict[x[i]] = yCalls[i]
-                else:
-                    callsDict[x[i]] += yCalls[i]
+                allCalls[x[i]] = allCalls.get(x[i], 0) + yCalls[i]
+                allOptions[x[i]] = allOptions.get(x[i], 0) + yCalls[i]
 
             x = self.bigDict[key]['puts']['Strike'].to_numpy().astype(float)
             if val == self.Values.Both or val == "Both":
@@ -168,44 +237,9 @@ class OptsAnalysis:
                     + np.asarray([v.replace(",", "") for v in self.bigDict[key]['puts']['OpenInt']], dtype=np.int)
             else:
                 yPuts = np.asarray([v.replace(",", "") for v in self.bigDict[key]['puts'][val]], dtype=np.int)
+
             for i in range(len(x)):
-                if x[i] not in putsDict:
-                    putsDict[x[i]] = yPuts[i]
-                else:
-                    putsDict[x[i]] += yPuts[i]
+                allPuts[x[i]] = allPuts.get(x[i], 0) + yPuts[i]
+                allOptions[x[i]] = allOptions.get(x[i], 0) + yPuts[i]
 
-        locale.setlocale(locale.LC_ALL, 'en_US')
-        sumCalls = np.sum(list(callsDict.values()))
-        sumPuts = np.sum(list(putsDict.values()))
-        strCalls = locale.format_string("%d", sumCalls, grouping=True)
-        strPuts = locale.format_string("%d", sumPuts, grouping=True)
-        perCalls = str(round(100 * float(sumCalls) / float(sumCalls + sumPuts), 2)) + '%'
-        perPuts = str(round(100 * float(sumPuts) / float(sumCalls + sumPuts), 2)) + '%'
-
-        mean = 0
-        var = 0
-        allOptions = {}
-        for idx, strike in enumerate(list(callsDict.keys())):
-            allOptions[strike] = list(callsDict.values())[idx] + list(putsDict.values())[idx]
-
-        for strike in list(allOptions.keys()):
-            mean += float(strike * allOptions[strike])
-            var += np.power(float(strike * allOptions[strike]), 2)
-        mean /= float(sumCalls + sumPuts)
-        var /= np.power(float(sumCalls + sumPuts), 2)
-        std = np.sqrt(var)
-        printStatsStr = "---- " + self.ticker + ' Options ' + self.GetValuesString(val) + " Stats ----"
-        print(printStatsStr)
-        print("\tMean:\t\t", "%.2f" % mean)
-        print("\tVariance:\t", "%.2f" % var)
-        print("\tSTD:\t\t", "%.2f" % std)
-        print("-" * len(printStatsStr))
-
-        plt.bar(callsDict.keys(), callsDict.values(), alpha=0.5, width=1.0, color='blue', label='Calls = ' + strCalls + ', ' + perCalls)
-        plt.bar(putsDict.keys(), putsDict.values(), alpha=0.5, width=1.0, color='red', label='Puts = ' + strPuts + ', ' + perPuts)
-        plt.plot([], [], color='black', label="Mean = " + "%.2f" % mean + ', STD = ±' + "%.2f" % std)
-        plt.title(self.ticker + ' Options ' + self.GetValuesString(val) + ', All Expiration Dates')
-        plt.xlabel('Strike')
-        plt.ylabel(self.GetValuesString(val) + ' Count')
-        plt.legend(loc='upper left')
-        plt.show()
+        self.Plot(val=val, start_date=start_date, end_date=end_date, allOptions=allOptions, allCalls=allCalls, allPuts=allPuts)
