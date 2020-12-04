@@ -5,48 +5,80 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import locale
 import enum
+import requests
+from bs4 import BeautifulSoup
+import datetime
 
 class OptsAnalysis:
     """A :class:`OptsAnalysis` object.
-       Disclaimer - only supports TradeStation formatting of option spreads!
     """
     class Values(enum.Enum):
         Both = 0
         Volume = 1
         OpenInt = 2
 
-    def __init__(self, filePath):
+    def __init__(self):
         """Constructor for the :class:`OptsAnalysis` class.
-            File should be called in the format:
+        """
+        self.Ticker = ""
+        self.Dates = []
+        self.BigDict = {}
+        self.FilePath = ""
+
+    def _Initialize(self):
+        self.Ticker = ""
+        self.Dates = []
+        self.BigDict = {}
+        self.FilePath = ""
+
+    def GetExpirationDates(self):
+        return self.Dates
+
+    def PrintExpirationDates(self):
+        print(self.Ticker + " Expiration Dates available:")
+        print(self.Dates)
+
+    def GetValuesString(self, val):
+        if val == self.Values.Both or val == "Both":
+            return "Volume and Open Interest"
+        elif val == self.Values.Volume or val == "Volume":
+            return "Volume"
+        elif val == self.Values.OpenInt or val == "OpenInt":
+            return "Open Interest"
+        else:
+            return
+
+    def BuildFromTS(self, filePath=None):
+        """
+        Supports TradeStation formatting of option spreads!
+        File should be called in the format:
             <ticker>.[xls, xlsx, csv]
         """
         if filePath:
             if type(filePath) is str:
-                self.filePath = filePath.lower()
-                if self.filePath.endswith(('.xls', '.xlsx', '.csv')):
+                self.FilePath = filePath.lower()
+                if self.FilePath.endswith(('.xls', '.xlsx', '.csv')):
                     """
                         taking values to skip the "C A L L S - P U T S" first line
                         keeping calls on the left to strike price puts on the right
                     """
                     try:
-                        ticker = self.filePath.split('/')[-1].split("\\")[-1].split('.')[0]
-                        self.ticker = str(ticker).strip().upper().lstrip("0")
+                        ticker = self.FilePath.split('/')[-1].split("\\")[-1].split('.')[0]
+                        self.Ticker = str(ticker).strip().upper().lstrip("0")
                     except:
                         print("Bad file name format, please provide in the format: <ticker>.[xls, xlsx, csv]")
                         return
-                    tempDF = pd.DataFrame(pd.read_excel(self.filePath).values)
+                    tempDF = pd.DataFrame(pd.read_excel(self.FilePath).values)
                     firstRow = [x.replace(" ", "") for x in list(tempDF.iloc[0])]
                     strikeIndex = [x.lower() for x in firstRow].index('strike')  # middle of the pack
                     dates = []
                     indexes = []
                     for idx, val in enumerate(list(tempDF.iloc[:, 0])):
                         if type(val) is str and val != "Pos":
-                            splt = val.split("\t")
-                            date = splt[0].replace("   ", "")
-                            # expectedMove = splt[2].replace("(Custom=(", "").replace("))", "")
+                            date = val.split("\t")[0].replace("   ", "")
                             dates.append(date)
                             indexes.append(idx)
-                    self.bigDict = {}
+                    self.BigDict = {}
                     for idx, val in enumerate(dates):
                         if idx != len(dates) - 1:
                             endRow = indexes[idx + 1]
@@ -63,9 +95,9 @@ class OptsAnalysis:
                         puts.index = np.arange(1, len(puts) + 1)
                         puts = puts.drop('Pos', axis=1, errors='ignore')  # drop column, ignore if not found
 
-                        self.bigDict[val] = {'calls': calls, 'puts': puts}
+                        self.BigDict[val] = {'calls': calls, 'puts': puts}
 
-                    self.Dates = list(self.bigDict.keys())
+                    self.Dates = list(self.BigDict.keys())
 
                 else:
                     raise Exception("Only excel files or csv files are allowed")
@@ -74,20 +106,52 @@ class OptsAnalysis:
         else:
             raise Exception("No file given")
 
-    def GetExpirationDates(self):
-        return self.Dates
-
-    def GetValuesString(self, val):
-        if val == self.Values.Both or val == "Both":
-            return "Volume and Open Interest"
-        elif val == self.Values.Volume or val == "Volume":
-            return "Volume"
-        elif val == self.Values.OpenInt or val == "OpenInt":
-            return "Open Interest"
+    def BuildDatesWeb(self, ticker=None):
+        if ticker:
+            self.Ticker = str(ticker).strip().upper().lstrip("0")
         else:
-            return
+            raise Exception("No ticker given")
 
-    def Plot(self, val=Values.Both, start_date=None, end_date=None, allOptions=None, allCalls=None, allPuts=None):
+        # Get Dates and Date codes
+        baseURL = r'https://finance.yahoo.com/quote/'
+        tickerURl = baseURL + self.Ticker + r'/options'
+        dateCodes = []
+        self.Dates = []
+        print("Getting Dates from: ", tickerURl)
+        resp = requests.get(tickerURl, headers={"User-Agent": "Mozilla/5.0"})  # passing user agent for granting access
+        if not resp.ok:
+            raise Exception("Response Error - " + resp.reason)
+        soup = BeautifulSoup(resp.content, 'html.parser')
+        for dateCode in soup.find_all("option"):
+            dateCodes.append([dateCode.attrs['value'], dateCode.string])
+            self.Dates.append(dateCode.string)
+        print("Done")
+        return dateCodes
+
+    def BuildFromWeb(self, ticker=None):
+        dateCodes = self.BuildDatesWeb(ticker=ticker)
+
+        # Get Option Data per date
+        baseURL = r'https://finance.yahoo.com/quote/'
+        tickerURl = baseURL + self.Ticker + r'/options'
+        for dateCode in dateCodes:
+            dateURL = tickerURl + r'?date=' + dateCode[0]
+            print("Getting Options Data from: ", dateURL)
+            resp = requests.get(dateURL,
+                                headers={"User-Agent": "Mozilla/5.0"})  # passing user agent for granting access
+            if not resp.ok:
+                raise Exception("Response Error - " + resp.reason)
+            soup = BeautifulSoup(resp.content, 'html.parser')
+            for table in soup.find_all("table"):
+                # Calls
+                if 'calls' in table.attrs['class']:
+                    print(table.attrs)
+                # Puts
+                if 'puts' in table.attrs['class']:
+                    print(table.attrs)
+                # for table_row in table.find_all('tr'):
+
+    def StatsPlot(self, stats=True, plot=True, val=Values.Both, start_date=None, end_date=None, allOptions=None, allCalls=None, allPuts=None):
         if start_date is None or end_date is None or allOptions is None or allCalls is None or allPuts is None:
             return
 
@@ -118,7 +182,7 @@ class OptsAnalysis:
         perCalls = str(round(100 * float(sumCalls) / float(sumOverall), 2)) + '%'
         perPuts = str(round(100 * float(sumPuts) / float(sumOverall), 2)) + '%'
 
-        printStatsStr = "---- " + self.ticker + ' Options ' + self.GetValuesString(val) + " Stats ----"
+        printStatsStr = "---- " + self.Ticker + ' Options ' + self.GetValuesString(val) + " Stats ----"
 
         locale.setlocale(locale.LC_ALL, 'en_US')
         strCalls = locale.format_string("%d", sumCalls, grouping=True)
@@ -143,43 +207,45 @@ class OptsAnalysis:
         else:
             printExpDatesStr = "Expiring From " + self.Dates[start] + " Up To " + self.Dates[end]
 
-        print(printStatsStr)
-        print("\t", printAllStr)
-        print("\t", printCallsStr)
-        print("\t", printPutsStr)
-        print("-" * len(printStatsStr))
+        if stats:
+            print(printStatsStr)
+            print("\t", printAllStr)
+            print("\t", printCallsStr)
+            print("\t", printPutsStr)
+            print("-" * len(printStatsStr))
 
-        plt.bar(allCalls.keys(), allCalls.values(), alpha=0.5, width=1.0, color='blue', label=printCallsStr.replace("\t", " ").replace(" |", ","))
-        plt.bar(allPuts.keys(), allPuts.values(), alpha=0.5, width=1.0, color='red', label=printPutsStr.replace("\t", " ").replace(" |", ","))
-        plt.plot([], [], color='black', label=printAllStr.replace("\t", " ").replace(" |", ","))
+        if plot:
+            plt.bar(allCalls.keys(), allCalls.values(), alpha=0.5, width=1.0, color='blue', label=printCallsStr.replace("\t", " ").replace(" |", ","))
+            plt.bar(allPuts.keys(), allPuts.values(), alpha=0.5, width=1.0, color='red', label=printPutsStr.replace("\t", " ").replace(" |", ","))
+            plt.plot([], [], color='black', label=printAllStr.replace("\t", " ").replace(" |", ","))
 
-        plt.title(self.ticker + ' Options ' + self.GetValuesString(val) + ", " + printExpDatesStr)
-        plt.xlabel('Strike')
-        plt.ylabel(self.GetValuesString(val) + ' Count')
-        plt.legend(loc='upper left')
-        plt.show()
+            plt.title(self.Ticker + ' Options ' + self.GetValuesString(val) + ", " + printExpDatesStr)
+            plt.xlabel('Strike')
+            plt.ylabel(self.GetValuesString(val) + ' Count')
+            plt.legend(loc='upper left')
+            plt.show()
 
     def PlotHistByDate(self, date, val=Values.Both):
         """ date format example = 27 Nov 20
             val = Volume or Open Int
         """
-        if date not in self.bigDict:
+        if date not in self.BigDict:
             print("Date given not in available expiration dates:", self.GetExpirationDates())
             return
         if val not in self.Values.__members__:
             print("Value given is not a part of Values class")
             return
         locale.setlocale(locale.LC_ALL, 'en_US')
-        x = self.bigDict[date]['calls']['Strike'].to_numpy().astype(float)
+        x = self.BigDict[date]['calls']['Strike'].to_numpy().astype(float)
 
         if val == self.Values.Both or val == "Both":
-            yCalls = np.asarray([v.replace(",", "") for v in self.bigDict[date]['calls']['Volume']], dtype=np.int) \
-                + np.asarray([v.replace(",", "") for v in self.bigDict[date]['calls']['OpenInt']], dtype=np.int)
-            yPuts = np.asarray([v.replace(",", "") for v in self.bigDict[date]['puts']['Volume']], dtype=np.int) \
-                + np.asarray([v.replace(",", "") for v in self.bigDict[date]['puts']['OpenInt']], dtype=np.int)
+            yCalls = np.asarray([v.replace(",", "") for v in self.BigDict[date]['calls']['Volume']], dtype=np.int) \
+                + np.asarray([v.replace(",", "") for v in self.BigDict[date]['calls']['OpenInt']], dtype=np.int)
+            yPuts = np.asarray([v.replace(",", "") for v in self.BigDict[date]['puts']['Volume']], dtype=np.int) \
+                + np.asarray([v.replace(",", "") for v in self.BigDict[date]['puts']['OpenInt']], dtype=np.int)
         else:
-            yCalls = np.asarray([v.replace(",", "") for v in self.bigDict[date]['calls'][val]], dtype=np.int)
-            yPuts = np.asarray([v.replace(",", "") for v in self.bigDict[date]['puts'][val]], dtype=np.int)
+            yCalls = np.asarray([v.replace(",", "") for v in self.BigDict[date]['calls'][val]], dtype=np.int)
+            yPuts = np.asarray([v.replace(",", "") for v in self.BigDict[date]['puts'][val]], dtype=np.int)
 
         allOptions = {}; allCalls = {}; allPuts = {}
         for idx, strike in enumerate(x):
@@ -187,7 +253,7 @@ class OptsAnalysis:
             allPuts[strike] = yPuts[idx]
             allOptions[strike] = yCalls[idx] + yPuts[idx]
 
-        self.Plot(val=val, start_date=date, end_date=date, allOptions=allOptions, allCalls=allCalls, allPuts=allPuts)
+        self.StatsPlot(val=val, stats=True, plot=True, start_date=date, end_date=date, allOptions=allOptions, allCalls=allCalls, allPuts=allPuts)
 
     def PlotHist(self, val=Values.Both, start_date=None, end_date=None):
         """ val = Volume, OpenInt or Both
@@ -220,26 +286,26 @@ class OptsAnalysis:
 
         allOptions = {}; allCalls = {}; allPuts = {}
         for key in self.Dates[start:end]:
-            x = self.bigDict[key]['calls']['Strike'].to_numpy().astype(float)
+            x = self.BigDict[key]['calls']['Strike'].to_numpy().astype(float)
             if val == self.Values.Both or val == "Both":
-                yCalls = np.asarray([v.replace(",", "") for v in self.bigDict[key]['calls']['Volume']], dtype=np.int) \
-                    + np.asarray([v.replace(",", "") for v in self.bigDict[key]['calls']['OpenInt']], dtype=np.int)
+                yCalls = np.asarray([v.replace(",", "") for v in self.BigDict[key]['calls']['Volume']], dtype=np.int) \
+                    + np.asarray([v.replace(",", "") for v in self.BigDict[key]['calls']['OpenInt']], dtype=np.int)
             else:
-                yCalls = np.asarray([v.replace(",", "") for v in self.bigDict[key]['calls'][val]], dtype=np.int)
+                yCalls = np.asarray([v.replace(",", "") for v in self.BigDict[key]['calls'][val]], dtype=np.int)
 
             for i in range(len(x)):
                 allCalls[x[i]] = allCalls.get(x[i], 0) + yCalls[i]
                 allOptions[x[i]] = allOptions.get(x[i], 0) + yCalls[i]
 
-            x = self.bigDict[key]['puts']['Strike'].to_numpy().astype(float)
+            x = self.BigDict[key]['puts']['Strike'].to_numpy().astype(float)
             if val == self.Values.Both or val == "Both":
-                yPuts = np.asarray([v.replace(",", "") for v in self.bigDict[key]['puts']['Volume']], dtype=np.int) \
-                    + np.asarray([v.replace(",", "") for v in self.bigDict[key]['puts']['OpenInt']], dtype=np.int)
+                yPuts = np.asarray([v.replace(",", "") for v in self.BigDict[key]['puts']['Volume']], dtype=np.int) \
+                    + np.asarray([v.replace(",", "") for v in self.BigDict[key]['puts']['OpenInt']], dtype=np.int)
             else:
-                yPuts = np.asarray([v.replace(",", "") for v in self.bigDict[key]['puts'][val]], dtype=np.int)
+                yPuts = np.asarray([v.replace(",", "") for v in self.BigDict[key]['puts'][val]], dtype=np.int)
 
             for i in range(len(x)):
                 allPuts[x[i]] = allPuts.get(x[i], 0) + yPuts[i]
                 allOptions[x[i]] = allOptions.get(x[i], 0) + yPuts[i]
 
-        self.Plot(val=val, start_date=start_date, end_date=end_date, allOptions=allOptions, allCalls=allCalls, allPuts=allPuts)
+        self.StatsPlot(val=val, stats=True, plot=True, start_date=start_date, end_date=end_date, allOptions=allOptions, allCalls=allCalls, allPuts=allPuts)

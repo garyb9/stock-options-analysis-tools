@@ -6,10 +6,11 @@ from OptsAnalysis import OptsAnalysis
 dataDir = r'../data'
 for file in os.listdir(dataDir):
     if file.endswith(("xls", "csv")):
-        Opts = OptsAnalysis(os.path.join(dataDir, file))
-        print(Opts.ticker + " Expiration Dates available:")
+        filePath = os.path.join(dataDir, file)
+        Opts = OptsAnalysis()
+        Opts.BuildFromTS(filePath)
+        Opts.PrintExpirationDates()
         expDates = Opts.GetExpirationDates()
-        print(expDates)
         Opts.PlotHistByDate(expDates[0], 'Volume')
         Opts.PlotHistByDate(expDates[0], 'OpenInt')
         Opts.PlotHistByDate(expDates[0], 'Both')
