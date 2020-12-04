@@ -23,13 +23,6 @@ class OptsAnalysis:
         self.Ticker = ""
         self.Dates = []
         self.BigDict = {}
-        self.FilePath = ""
-
-    def _Initialize(self):
-        self.Ticker = ""
-        self.Dates = []
-        self.BigDict = {}
-        self.FilePath = ""
 
     def GetExpirationDates(self):
         return self.Dates
@@ -56,19 +49,19 @@ class OptsAnalysis:
         """
         if filePath:
             if type(filePath) is str:
-                self.FilePath = filePath.lower()
-                if self.FilePath.endswith(('.xls', '.xlsx', '.csv')):
+                filePath = filePath.lower()
+                if filePath.endswith(('.xls', '.xlsx', '.csv')):
                     """
                         taking values to skip the "C A L L S - P U T S" first line
                         keeping calls on the left to strike price puts on the right
                     """
                     try:
-                        ticker = self.FilePath.split('/')[-1].split("\\")[-1].split('.')[0]
+                        ticker = filePath.split('/')[-1].split("\\")[-1].split('.')[0]
                         self.Ticker = str(ticker).strip().upper().lstrip("0")
                     except:
                         print("Bad file name format, please provide in the format: <ticker>.[xls, xlsx, csv]")
                         return
-                    tempDF = pd.DataFrame(pd.read_excel(self.FilePath).values)
+                    tempDF = pd.DataFrame(pd.read_excel(filePath).values)
                     firstRow = [x.replace(" ", "") for x in list(tempDF.iloc[0])]
                     strikeIndex = [x.lower() for x in firstRow].index('strike')  # middle of the pack
                     dates = []
@@ -123,8 +116,8 @@ class OptsAnalysis:
             raise Exception("Response Error - " + resp.reason)
         soup = BeautifulSoup(resp.content, 'html.parser')
         for dateCode in soup.find_all("option"):
-            dateCodes.append([dateCode.attrs['value'], dateCode.string])
-            self.Dates.append(dateCode.string)
+            dateCodes.append([dateCode.attrs['value'], dateCode.text])
+            self.Dates.append(dateCode.text)
         print("Done")
         return dateCodes
 
@@ -134,6 +127,7 @@ class OptsAnalysis:
         # Get Option Data per date
         baseURL = r'https://finance.yahoo.com/quote/'
         tickerURl = baseURL + self.Ticker + r'/options'
+        self.BigDict = {}
         for dateCode in dateCodes:
             dateURL = tickerURl + r'?date=' + dateCode[0]
             print("Getting Options Data from: ", dateURL)
@@ -143,13 +137,34 @@ class OptsAnalysis:
                 raise Exception("Response Error - " + resp.reason)
             soup = BeautifulSoup(resp.content, 'html.parser')
             for table in soup.find_all("table"):
+                # Head
+                firstRow = []
+                for head in table.find_all("thead"):
+                    for th in head.find("tr").find_all("th"):
+                        firstRow.append(th.text)
+                replacements = {'Open Interest': 'OpenInt', 'Implied Volatility': 'ImpVol'}
+                firstRow = [replacements.get(x, x) for x in firstRow]
+
+                # Body
+                optsRows = []
+                for body in table.find_all("tbody"):
+                    for tr in body.find_all("tr"):
+                        thisRow = []
+                        for td in tr.find_all("td"):
+                            thisRow.append(td.text)
+                        optsRows.append(thisRow)
+
+                optsDF = pd.DataFrame(data=optsRows, columns=firstRow)
+
                 # Calls
                 if 'calls' in table.attrs['class']:
-                    print(table.attrs)
+                    self.BigDict[dateCode[1]] = {'calls': optsDF}
+
                 # Puts
                 if 'puts' in table.attrs['class']:
-                    print(table.attrs)
-                # for table_row in table.find_all('tr'):
+                    self.BigDict[dateCode[1]] = {'puts': optsDF}
+
+                print(optsDF)
 
     def StatsPlot(self, stats=True, plot=True, val=Values.Both, start_date=None, end_date=None, allOptions=None, allCalls=None, allPuts=None):
         if start_date is None or end_date is None or allOptions is None or allCalls is None or allPuts is None:
