@@ -169,7 +169,7 @@ class OptsAnalysis:
     def StatsPlot(self, stats=True, plot=True, val=Values.Both, start_date=None, end_date=None, allOptions=None, allCalls=None, allPuts=None):
         if start_date is None or end_date is None or allOptions is None or allCalls is None or allPuts is None:
             return
-        startTimer = utils.start_timer()
+        # startTimer = utils.start_timer()
 
         sumCalls = np.sum(list(allCalls.values()))
         sumPuts = np.sum(list(allPuts.values()))
@@ -226,7 +226,7 @@ class OptsAnalysis:
             print("\t", printCallsStr)
             print("\t", printPutsStr)
             print("-" * len(printStatsStr))
-            utils.print_time(startTimer)
+            # utils.print_time(startTimer)
 
         if plot:
             plt.bar(allCalls.keys(), allCalls.values(), alpha=0.5, width=1.0, color='blue', label=printCallsStr.replace("\t", " ").replace(" |", ","))
