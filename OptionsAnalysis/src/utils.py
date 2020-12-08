@@ -4,7 +4,7 @@ from datetime import datetime
 from dateutil.parser import parse
 
 def start_timer():
-    return datetime.now()
+    return(datetime.now())
 
 def print_time(start):
     print('Runtime in seconds => ' + str(datetime.now() - start))
