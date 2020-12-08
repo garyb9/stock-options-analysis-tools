@@ -3,7 +3,8 @@ from OptsAnalysis import OptsAnalysis
 # SPY (S&P 500 ETF) example
 filePath = r'../data/spy.xls'
 Opts = OptsAnalysis()
-Opts.BuildFromTS(filePath)
+# Opts.BuildFromTS(filePath)
+Opts.BuildFromWeb('SPY')
 
 for date in Opts.GetExpirationDates():
     Opts.PlotHistByDate(date, 'Both')

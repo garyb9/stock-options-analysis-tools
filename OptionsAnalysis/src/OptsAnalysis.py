@@ -8,6 +8,7 @@ import enum
 import requests
 from bs4 import BeautifulSoup
 import utils
+from threading import Thread, Lock
 
 class OptsAnalysis:
     """A :class:`OptsAnalysis` object.
@@ -121,50 +122,68 @@ class OptsAnalysis:
         print("Done")
         return dateCodes
 
+    def ReqThread(self, dateCode, mutex):
+        startTimer = utils.start_timer()
+        dateURL = r'https://finance.yahoo.com/quote/' + self.Ticker + r'/options?date=' + dateCode[0]
+        mutex.acquire()
+        try:
+            print("Getting Options Data from: ", dateURL)
+        finally:
+            mutex.release()
+        resp = requests.get(dateURL,
+                            headers={"User-Agent": "Mozilla/5.0"})  # passing user agent for granting access
+        if not resp.ok:
+            raise Exception("Response Error - " + resp.reason)
+        soup = BeautifulSoup(resp.content, 'html.parser')
+        optsDict = {'calls': None, 'puts': None}
+        for table in soup.find_all("table"):
+            # Head
+            firstRow = []
+            for head in table.find_all("thead"):
+                for th in head.find("tr").find_all("th"):
+                    firstRow.append(th.text)
+            replacements = {'Open Interest': 'OpenInt', 'Implied Volatility': 'ImpVol'}
+            firstRow = [replacements.get(x, x) for x in firstRow]
+
+            # Body
+            optsRows = []
+            for body in table.find_all("tbody"):
+                for tr in body.find_all("tr"):
+                    thisRow = []
+                    for td in tr.find_all("td"):
+                        thisRow.append(td.text)
+                    optsRows.append(thisRow)
+
+            optsDF = pd.DataFrame(data=optsRows, columns=firstRow)
+            # Calls
+            if 'calls' in table.attrs['class']:
+                optsDict['calls'] = optsDF
+
+            # Puts
+            if 'puts' in table.attrs['class']:
+                optsDict['puts'] = optsDF
+
+        mutex.acquire()
+        try:
+            self.BigDict[dateCode[1]] = optsDict
+            print("Request Thread for: " + dateURL + " ended after " + utils.get_timer(startTimer) + " seconds")
+        finally:
+            mutex.release()
+
     def BuildFromWeb(self, ticker=None):
         dateCodes = self.BuildDatesWeb(ticker=ticker)
 
         # Get Option Data per date
-        baseURL = r'https://finance.yahoo.com/quote/'
-        tickerURl = baseURL + self.Ticker + r'/options'
         self.BigDict = {}
+        mutex = Lock()
+        threads = []
         for dateCode in dateCodes:
-            dateURL = tickerURl + r'?date=' + dateCode[0]
-            print("Getting Options Data from: ", dateURL)
-            resp = requests.get(dateURL,
-                                headers={"User-Agent": "Mozilla/5.0"})  # passing user agent for granting access
-            if not resp.ok:
-                raise Exception("Response Error - " + resp.reason)
-            soup = BeautifulSoup(resp.content, 'html.parser')
-            for table in soup.find_all("table"):
-                # Head
-                firstRow = []
-                for head in table.find_all("thead"):
-                    for th in head.find("tr").find_all("th"):
-                        firstRow.append(th.text)
-                replacements = {'Open Interest': 'OpenInt', 'Implied Volatility': 'ImpVol'}
-                firstRow = [replacements.get(x, x) for x in firstRow]
+            t = Thread(target=self.ReqThread, args=(dateCode, mutex))
+            threads.append(t)
+            t.start()
 
-                # Body
-                optsRows = []
-                for body in table.find_all("tbody"):
-                    for tr in body.find_all("tr"):
-                        thisRow = []
-                        for td in tr.find_all("td"):
-                            thisRow.append(td.text)
-                        optsRows.append(thisRow)
-
-                optsDF = pd.DataFrame(data=optsRows, columns=firstRow)
-
-                # Calls
-                if 'calls' in table.attrs['class']:
-                    self.BigDict[dateCode[1]] = {'calls': optsDF}
-
-                # Puts
-                if 'puts' in table.attrs['class']:
-                    self.BigDict[dateCode[1]] = {'puts': optsDF}
-
-                print(optsDF)
+        for t in threads:
+            t.join()
 
     def StatsPlot(self, stats=True, plot=True, val=Values.Both, start_date=None, end_date=None, allOptions=None, allCalls=None, allPuts=None):
         if start_date is None or end_date is None or allOptions is None or allCalls is None or allPuts is None:
@@ -178,18 +197,25 @@ class OptsAnalysis:
         mean = 0; meanCalls = 0; meanPuts = 0
         std = 0; stdCalls = 0; stdPuts = 0
 
-        for strike in list(allOptions.keys()):
+        # Calls
+        for strike in list(allCalls.keys()):
             meanCalls += float(strike * allCalls[strike]) / sumCalls
-            meanPuts += float(strike * allPuts[strike]) / sumPuts
-            mean += float(strike * allOptions[strike]) / sumOverall
-
-        for strike in list(allOptions.keys()):
+        for strike in list(allCalls.keys()):
             stdCalls += np.power(float((strike - meanCalls)), 2) * allCalls[strike] / sumCalls
-            stdPuts += np.power(float((strike - meanPuts)), 2) * allPuts[strike] / sumPuts
-            std += np.power(float((strike - mean)), 2) * allOptions[strike] / sumOverall
-
         stdCalls = np.sqrt(stdCalls)
+
+        # Puts
+        for strike in list(allPuts.keys()):
+            meanPuts += float(strike * allPuts[strike]) / sumPuts
+        for strike in list(allPuts.keys()):
+            stdPuts += np.power(float((strike - meanPuts)), 2) * allPuts[strike] / sumPuts
         stdPuts = np.sqrt(stdPuts)
+
+        # All Options
+        for strike in list(allOptions.keys()):
+            mean += float(strike * allOptions[strike]) / sumOverall
+        for strike in list(allOptions.keys()):
+            std += np.power(float((strike - mean)), 2) * allOptions[strike] / sumOverall
         std = np.sqrt(std)
 
         perCalls = str(round(100 * float(sumCalls) / float(sumOverall), 2)) + '%'
@@ -250,22 +276,34 @@ class OptsAnalysis:
             print("Value given is not a part of Values class")
             return
         locale.setlocale(locale.LC_ALL, 'en_US')
-        x = self.BigDict[date]['calls']['Strike'].to_numpy().astype(float)
+
+        xCalls = np.asarray(self.BigDict[date]['calls']['Strike'], dtype=np.float)
+        xPuts = np.asarray(self.BigDict[date]['puts']['Strike'], dtype=np.float)
 
         if val == self.Values.Both or val == "Both":
-            yCalls = np.asarray([v.replace(",", "") for v in self.BigDict[date]['calls']['Volume']], dtype=np.int) \
-                + np.asarray([v.replace(",", "") for v in self.BigDict[date]['calls']['OpenInt']], dtype=np.int)
-            yPuts = np.asarray([v.replace(",", "") for v in self.BigDict[date]['puts']['Volume']], dtype=np.int) \
-                + np.asarray([v.replace(",", "") for v in self.BigDict[date]['puts']['OpenInt']], dtype=np.int)
+            yCalls = np.asarray([v.replace(",", "").replace("-", "0") for v in self.BigDict[date]['calls']['Volume']], dtype=np.int) \
+                + np.asarray([v.replace(",", "").replace("-", "0") for v in self.BigDict[date]['calls']['OpenInt']], dtype=np.int)
+            yPuts = np.asarray([v.replace(",", "").replace("-", "0") for v in self.BigDict[date]['puts']['Volume']], dtype=np.int) \
+                + np.asarray([v.replace(",", "").replace("-", "0") for v in self.BigDict[date]['puts']['OpenInt']], dtype=np.int)
         else:
-            yCalls = np.asarray([v.replace(",", "") for v in self.BigDict[date]['calls'][val]], dtype=np.int)
-            yPuts = np.asarray([v.replace(",", "") for v in self.BigDict[date]['puts'][val]], dtype=np.int)
+            yCalls = np.asarray([v.replace(",", "").replace("-", "0") for v in self.BigDict[date]['calls'][val]], dtype=np.int)
+            yPuts = np.asarray([v.replace(",", "").replace("-", "0") for v in self.BigDict[date]['puts'][val]], dtype=np.int)
 
         allOptions = {}; allCalls = {}; allPuts = {}
-        for idx, strike in enumerate(x):
+        for idx, strike in enumerate(xCalls):
             allCalls[strike] = yCalls[idx]
+        for idx, strike in enumerate(xPuts):
             allPuts[strike] = yPuts[idx]
-            allOptions[strike] = yCalls[idx] + yPuts[idx]
+
+        xAll = np.unique(np.concatenate((xCalls, xPuts), 0))
+        for strike in xAll:
+            allOptions[strike] = 0
+            idx = np.where(xCalls == strike)
+            if idx[0].shape != (0, ):
+                allOptions[strike] += yCalls[idx[0]]
+            idx = np.where(xPuts == strike)
+            if idx[0].shape != (0, ):
+                allOptions[strike] += yPuts[idx[0]]
 
         self.StatsPlot(val=val, stats=True, plot=True, start_date=date, end_date=date, allOptions=allOptions, allCalls=allCalls, allPuts=allPuts)
 
