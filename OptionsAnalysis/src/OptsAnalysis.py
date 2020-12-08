@@ -7,7 +7,7 @@ import locale
 import enum
 import requests
 from bs4 import BeautifulSoup
-import datetime
+import utils
 
 class OptsAnalysis:
     """A :class:`OptsAnalysis` object.
@@ -169,30 +169,28 @@ class OptsAnalysis:
     def StatsPlot(self, stats=True, plot=True, val=Values.Both, start_date=None, end_date=None, allOptions=None, allCalls=None, allPuts=None):
         if start_date is None or end_date is None or allOptions is None or allCalls is None or allPuts is None:
             return
+        startTimer = utils.start_timer()
+
+        sumCalls = np.sum(list(allCalls.values()))
+        sumPuts = np.sum(list(allPuts.values()))
+        sumOverall = sumCalls + sumPuts
 
         mean = 0; meanCalls = 0; meanPuts = 0
         std = 0; stdCalls = 0; stdPuts = 0
 
         for strike in list(allOptions.keys()):
-            meanCalls += float(strike * allCalls[strike])
-            meanPuts += float(strike * allPuts[strike])
-            mean += float(strike * allOptions[strike])
+            meanCalls += float(strike * allCalls[strike]) / sumCalls
+            meanPuts += float(strike * allPuts[strike]) / sumPuts
+            mean += float(strike * allOptions[strike]) / sumOverall
 
-            stdCalls += np.power(float(strike * allCalls[strike]), 2)
-            stdPuts += np.power(float(strike * allPuts[strike]), 2)
-            std += np.power(float(strike * allOptions[strike]), 2)
+        for strike in list(allOptions.keys()):
+            stdCalls += np.power(float((strike - meanCalls)), 2) * allCalls[strike] / sumCalls
+            stdPuts += np.power(float((strike - meanPuts)), 2) * allPuts[strike] / sumPuts
+            std += np.power(float((strike - mean)), 2) * allOptions[strike] / sumOverall
 
-        sumCalls = np.sum(list(allCalls.values()))
-        sumPuts = np.sum(list(allPuts.values()))
-        sumOverall = sumCalls+sumPuts
-
-        meanCalls /= float(sumCalls)
-        meanPuts /= float(sumPuts)
-        mean /= float(sumCalls + sumPuts)
-
-        stdCalls = np.sqrt(std / np.power(float(sumCalls), 2))
-        stdPuts = np.sqrt(std / np.power(float(sumPuts), 2))
-        std = np.sqrt(std / np.power(float(sumOverall), 2))
+        stdCalls = np.sqrt(stdCalls)
+        stdPuts = np.sqrt(stdPuts)
+        std = np.sqrt(std)
 
         perCalls = str(round(100 * float(sumCalls) / float(sumOverall), 2)) + '%'
         perPuts = str(round(100 * float(sumPuts) / float(sumOverall), 2)) + '%'
@@ -228,6 +226,7 @@ class OptsAnalysis:
             print("\t", printCallsStr)
             print("\t", printPutsStr)
             print("-" * len(printStatsStr))
+            utils.print_time(startTimer)
 
         if plot:
             plt.bar(allCalls.keys(), allCalls.values(), alpha=0.5, width=1.0, color='blue', label=printCallsStr.replace("\t", " ").replace(" |", ","))
