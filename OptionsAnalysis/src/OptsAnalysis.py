@@ -336,9 +336,25 @@ class OptsAnalysis:
         strPuts = '{:<{width}}'.format(strPuts, width=widthStr)
         strOverall = '{:<{width}}'.format(strOverall, width=widthStr)
 
-        printCallsStr = "Calls:\t" + strCalls + " | Mean = " + "%.2f" % meanCalls + " | STD = ±" + "%.2f" % stdCalls + " | " + perCalls
-        printPutsStr = "Puts:\t" + strPuts + " | Mean = " + "%.2f" % meanPuts + " | STD = ±" + "%.2f" % stdPuts + " | " + perPuts
-        printAllStr = "All:\t" + strOverall + " | Mean = " + "%.2f" % meanAll + " | STD = ±" + "%.2f" % stdAll
+        strMeanCalls = "%.2f" % meanCalls
+        strMeanPuts = "%.2f" % meanPuts
+        strMeanAll = "%.2f" % meanAll
+        widthStr = str(max([len(strMeanCalls), len(strMeanPuts), len(strMeanAll)]))
+        strMeanCalls = '{:<{width}}'.format(strMeanCalls, width=widthStr)
+        strMeanPuts = '{:<{width}}'.format(strMeanPuts, width=widthStr)
+        strMeanAll = '{:<{width}}'.format(strMeanAll, width=widthStr)
+
+        strStdCalls = "%.2f" % stdCalls
+        strStdPuts = "%.2f" % stdPuts
+        strStdAll = "%.2f" % stdAll
+        widthStr = str(max([len(strStdCalls), len(strStdPuts), len(strStdAll)]))
+        strStdCalls = '{:<{width}}'.format(strStdCalls, width=widthStr)
+        strStdPuts = '{:<{width}}'.format(strStdPuts, width=widthStr)
+        strStdAll = '{:<{width}}'.format(strStdAll, width=widthStr)
+
+        printCallsStr = "Calls:\t" + strCalls + " | Mean = " + strMeanCalls + " | STD = ±" + strStdCalls + " | " + perCalls
+        printPutsStr = "Puts:\t" + strPuts + " | Mean = " + strMeanPuts + " | STD = ±" + strStdPuts + " | " + perPuts
+        printAllStr = "All:\t" + strOverall + " | Mean = " + strMeanAll + " | STD = ±" + strStdAll
 
         if dates[0] == self.Dates[0] and dates[-1] == self.Dates[-1]:
             printExpDatesStr = "All Expiration Dates"
@@ -359,7 +375,6 @@ class OptsAnalysis:
             plt.bar(optsDF.index, optsDF['calls'], alpha=0.5, width=1.0, color='blue', label=printCallsStr.replace("\t", " ").replace(" |", ","))
             plt.bar(optsDF.index, optsDF['puts'], alpha=0.5, width=1.0, color='red', label=printPutsStr.replace("\t", " ").replace(" |", ","))
             plt.plot([], [], color='black', label=printAllStr.replace("\t", " ").replace(" |", ","))
-
             plt.title(self.Ticker + ' Options ' + self.GetValuesString(val) + ", " + printExpDatesStr)
             plt.xlabel('Strike')
             plt.ylabel(self.GetValuesString(val) + ' Count')
