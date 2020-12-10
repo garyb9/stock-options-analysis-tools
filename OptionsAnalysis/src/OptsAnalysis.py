@@ -185,15 +185,110 @@ class OptsAnalysis:
         for t in threads:
             t.join()
 
-    def StatsPlot(self, stats=True, plot=True, val=Values.Both, start_date=None, end_date=None, allOptions=None, allCalls=None, allPuts=None):
-        if start_date is None or end_date is None or allOptions is None or allCalls is None or allPuts is None:
+    def GetDatesStartEnd(self, start_date=None, end_date=None):
+        if start_date is None:
+            start_date = self.Dates[0]
+        else:
+            if start_date not in self.Dates:
+                print("Start Date given not in available expiration dates:", self.Dates)
+                return
+
+        if end_date is None or self.Dates.index(end_date) == len(self.Dates) - 1:
+            start = self.Dates.index(start_date)
+            dates = self.Dates[start:]
+        else:
+            if end_date not in self.Dates:
+                print("End Date given not in available expiration dates:", self.Dates)
+                return
+            start = self.Dates.index(start_date)
+            end = self.Dates.index(end_date)
+            if start > end:
+                print("End Date given should be equal or before Start Date")
+                return
+            elif start == end:
+                dates = self.Dates[start:start+1]
+            else:
+                dates = self.Dates[start:end+1]
+
+        return dates if dates else []
+
+    def GetOptsDF(self, val=Values.Both, dates=None):
+        """ val = Volume, OpenInt or Both
+            start_date = one of available expiration dates
+            end_Date = one of available expiration dates, must be later than start_date
+        """
+        if val not in self.Values.__members__:
+            print("Value given is not a part of Values class")
+            return
+        """
+        allOptions = {}; allCalls = {}; allPuts = {}
+        for key in dates:
+            xCalls = np.asarray(self.BigDict[key]['calls']['Strike'], dtype=np.float)
+            if val == self.Values.Both or val == "Both":
+                yCalls = np.asarray([v.replace(",", "").replace("-", "0") for v in self.BigDict[key]['calls']['Volume']], dtype=np.int) \
+                         + np.asarray([v.replace(",", "").replace("-", "0") for v in self.BigDict[key]['calls']['OpenInt']], dtype=np.int)
+            else:
+                yCalls = np.asarray([v.replace(",", "").replace("-", "0") for v in self.BigDict[key]['calls'][val]], dtype=np.int)
+
+            for idx, strike in enumerate(xCalls):
+                allCalls[strike]    = allCalls.get(strike, 0) + yCalls[idx]
+                allOptions[strike]  = allOptions.get(strike, 0) + allCalls[strike]
+
+            xPuts = np.asarray(self.BigDict[key]['puts']['Strike'], dtype=np.float)
+            if val == self.Values.Both or val == "Both":
+                yPuts = np.asarray([v.replace(",", "").replace("-", "0") for v in self.BigDict[key]['puts']['Volume']], dtype=np.int) \
+                        + np.asarray([v.replace(",", "").replace("-", "0") for v in self.BigDict[key]['puts']['OpenInt']], dtype=np.int)
+            else:
+                yPuts = np.asarray([v.replace(",", "").replace("-", "0") for v in self.BigDict[key]['puts'][val]], dtype=np.int)
+
+            for idx, strike in enumerate(xPuts):
+                allPuts[strike]     = allPuts.get(strike, 0) + yPuts[idx]
+                allOptions[strike]  = allOptions.get(strike, 0) + allPuts[strike]
+
+        return {'calls': allCalls, 'puts': allPuts, 'all': allOptions}
+        """
+        df = pd.DataFrame(columns=['calls', 'puts', 'all'])
+        for key in dates:
+            xCalls = np.asarray(self.BigDict[key]['calls']['Strike'], dtype=np.float)
+            if val == self.Values.Both or val == "Both":
+                yCalls = np.asarray([v.replace(",", "").replace("-", "0") for v in self.BigDict[key]['calls']['Volume']], dtype=np.int) \
+                         + np.asarray([v.replace(",", "").replace("-", "0") for v in self.BigDict[key]['calls']['OpenInt']], dtype=np.int)
+            else:
+                yCalls = np.asarray([v.replace(",", "").replace("-", "0") for v in self.BigDict[key]['calls'][val]], dtype=np.int)
+
+            for idx, strike in enumerate(xCalls):
+                if strike in df.index:
+                    df.loc[strike] += [yCalls[idx], 0, yCalls[idx]]
+                else:
+                    df.loc[strike] = [yCalls[idx], 0, yCalls[idx]]
+
+            xPuts = np.asarray(self.BigDict[key]['puts']['Strike'], dtype=np.float)
+            if val == self.Values.Both or val == "Both":
+                yPuts = np.asarray([v.replace(",", "").replace("-", "0") for v in self.BigDict[key]['puts']['Volume']], dtype=np.int) \
+                        + np.asarray([v.replace(",", "").replace("-", "0") for v in self.BigDict[key]['puts']['OpenInt']], dtype=np.int)
+            else:
+                yPuts = np.asarray([v.replace(",", "").replace("-", "0") for v in self.BigDict[key]['puts'][val]], dtype=np.int)
+
+            for idx, strike in enumerate(xPuts):
+                if strike in df.index:
+                    df.loc[strike] += [0, yPuts[idx], yPuts[idx]]
+                else:
+                    df.loc[strike] = [0, yPuts[idx], yPuts[idx]]
+
+        df = df.sort_index()
+        return df
+
+    def StatsPlot(self, stats=True, plot=True, val=Values.Both, dates=None, optsDF=None):
+        if dates is None or dates is []:
+            print("Empty list of dates given")
             return
         # startTimer = utils.start_timer()
 
-        sumCalls = np.sum(list(allCalls.values()))
-        sumPuts = np.sum(list(allPuts.values()))
-        sumOverall = sumCalls + sumPuts
+        sumCalls = optsDF['calls'].sum()
+        sumPuts = optsDF['puts'].sum()
+        sumOverall = optsDF['all'].sum()
 
+        """
         mean = 0; meanCalls = 0; meanPuts = 0
         std = 0; stdCalls = 0; stdPuts = 0
 
@@ -217,6 +312,15 @@ class OptsAnalysis:
         for strike in list(allOptions.keys()):
             std += np.power(float((strike - mean)), 2) * allOptions[strike] / sumOverall
         std = np.sqrt(std)
+        """
+        meanCalls = np.average(optsDF.index, weights=optsDF['calls'])
+        stdCalls = np.sqrt(np.average((optsDF.index - meanCalls)**2, weights=optsDF['calls']))
+
+        meanPuts = np.average(optsDF.index, weights=optsDF['puts'])
+        stdPuts = np.sqrt(np.average((optsDF.index - meanPuts)**2, weights=optsDF['puts']))
+
+        meanAll = np.average(optsDF.index, weights=optsDF['all'])
+        stdAll = np.sqrt(np.average((optsDF.index - meanAll)**2, weights=optsDF['all']))
 
         perCalls = str(round(100 * float(sumCalls) / float(sumOverall), 2)) + '%'
         perPuts = str(round(100 * float(sumPuts) / float(sumOverall), 2)) + '%'
@@ -234,17 +338,14 @@ class OptsAnalysis:
 
         printCallsStr = "Calls:\t" + strCalls + " | Mean = " + "%.2f" % meanCalls + " | STD = ±" + "%.2f" % stdCalls + " | " + perCalls
         printPutsStr = "Puts:\t" + strPuts + " | Mean = " + "%.2f" % meanPuts + " | STD = ±" + "%.2f" % stdPuts + " | " + perPuts
-        printAllStr = "All:\t" + strOverall + " | Mean = " + "%.2f" % mean + " | STD = ±" + "%.2f" % std
+        printAllStr = "All:\t" + strOverall + " | Mean = " + "%.2f" % meanAll + " | STD = ±" + "%.2f" % stdAll
 
-        start = self.Dates.index(start_date)
-        end = self.Dates.index(end_date)
-
-        if start_date == self.Dates[0] and end_date == self.Dates[-1]:
+        if dates[0] == self.Dates[0] and dates[-1] == self.Dates[-1]:
             printExpDatesStr = "All Expiration Dates"
-        elif start_date == end_date:
-            printExpDatesStr = "Expiring at " + self.Dates[start]
+        elif len(dates) == 1:
+            printExpDatesStr = "Expiring at " + dates[0]
         else:
-            printExpDatesStr = "Expiring From " + self.Dates[start] + " Up To " + self.Dates[end]
+            printExpDatesStr = "Expiring From " + dates[0] + " Up To " + dates[-1]
 
         if stats:
             print(printStatsStr)
@@ -255,8 +356,8 @@ class OptsAnalysis:
             # utils.print_time(startTimer)
 
         if plot:
-            plt.bar(allCalls.keys(), allCalls.values(), alpha=0.5, width=1.0, color='blue', label=printCallsStr.replace("\t", " ").replace(" |", ","))
-            plt.bar(allPuts.keys(), allPuts.values(), alpha=0.5, width=1.0, color='red', label=printPutsStr.replace("\t", " ").replace(" |", ","))
+            plt.bar(optsDF.index, optsDF['calls'], alpha=0.5, width=1.0, color='blue', label=printCallsStr.replace("\t", " ").replace(" |", ","))
+            plt.bar(optsDF.index, optsDF['puts'], alpha=0.5, width=1.0, color='red', label=printPutsStr.replace("\t", " ").replace(" |", ","))
             plt.plot([], [], color='black', label=printAllStr.replace("\t", " ").replace(" |", ","))
 
             plt.title(self.Ticker + ' Options ' + self.GetValuesString(val) + ", " + printExpDatesStr)
@@ -266,98 +367,18 @@ class OptsAnalysis:
             plt.show()
 
     def PlotHistByDate(self, date, val=Values.Both):
-        """ date format example = 27 Nov 20
-            val = Volume or Open Int
-        """
-        if date not in self.BigDict:
-            print("Date given not in available expiration dates:", self.GetExpirationDates())
-            return
-        if val not in self.Values.__members__:
-            print("Value given is not a part of Values class")
-            return
-        locale.setlocale(locale.LC_ALL, 'en_US')
+        optsDF = self.GetOptsDF(val=val, dates=[date])
 
-        xCalls = np.asarray(self.BigDict[date]['calls']['Strike'], dtype=np.float)
-        xPuts = np.asarray(self.BigDict[date]['puts']['Strike'], dtype=np.float)
-
-        if val == self.Values.Both or val == "Both":
-            yCalls = np.asarray([v.replace(",", "").replace("-", "0") for v in self.BigDict[date]['calls']['Volume']], dtype=np.int) \
-                + np.asarray([v.replace(",", "").replace("-", "0") for v in self.BigDict[date]['calls']['OpenInt']], dtype=np.int)
-            yPuts = np.asarray([v.replace(",", "").replace("-", "0") for v in self.BigDict[date]['puts']['Volume']], dtype=np.int) \
-                + np.asarray([v.replace(",", "").replace("-", "0") for v in self.BigDict[date]['puts']['OpenInt']], dtype=np.int)
-        else:
-            yCalls = np.asarray([v.replace(",", "").replace("-", "0") for v in self.BigDict[date]['calls'][val]], dtype=np.int)
-            yPuts = np.asarray([v.replace(",", "").replace("-", "0") for v in self.BigDict[date]['puts'][val]], dtype=np.int)
-
-        allOptions = {}; allCalls = {}; allPuts = {}
-        for idx, strike in enumerate(xCalls):
-            allCalls[strike] = yCalls[idx]
-        for idx, strike in enumerate(xPuts):
-            allPuts[strike] = yPuts[idx]
-
-        xAll = np.unique(np.concatenate((xCalls, xPuts), 0))
-        for strike in xAll:
-            allOptions[strike] = 0
-            idx = np.where(xCalls == strike)
-            if idx[0].shape != (0, ):
-                allOptions[strike] += yCalls[idx[0]]
-            idx = np.where(xPuts == strike)
-            if idx[0].shape != (0, ):
-                allOptions[strike] += yPuts[idx[0]]
-
-        self.StatsPlot(val=val, stats=True, plot=True, start_date=date, end_date=date, allOptions=allOptions, allCalls=allCalls, allPuts=allPuts)
+        self.StatsPlot(val=val, stats=True, plot=True, dates=[date], optsDF=optsDF)
 
     def PlotHist(self, val=Values.Both, start_date=None, end_date=None):
-        """ val = Volume, OpenInt or Both
-            start_date = one of available expiration dates
-            end_Date = one of available expiration dates, must be later than start_date
-        """
-        if val not in self.Values.__members__:
-            print("Value given is not a part of Values class")
-            return
+        dates = self.GetDatesStartEnd(start_date=start_date, end_date=end_date)
 
-        if start_date is not None:
-            if start_date not in self.Dates:
-                print("Start Date given not in available expiration dates:", self.Dates)
-                return
-        else:
-            start_date = self.Dates[0]
+        optsDF = self.GetOptsDF(val=val, dates=dates)
 
-        if end_date is not None:
-            if  end_date not in self.Dates:
-                print("End Date given not in available expiration dates:", self.Dates)
-                return
-        else:
-            end_date = self.Dates[-1]
+        self.StatsPlot(val=val, stats=True, plot=True, dates=dates, optsDF=optsDF)
 
-        start = self.Dates.index(start_date)
-        end = self.Dates.index(end_date)
-        if start > end:
-            print("End Date given should be equal or before Start Date")
-            return
+    def PlotTimelineWithErrors(self, val=Values.Both, start_date=None, end_date=None):
+        dates = self.GetDatesStartEnd(start_date=start_date, end_date=end_date)
 
-        allOptions = {}; allCalls = {}; allPuts = {}
-        for key in self.Dates[start:end]:
-            x = self.BigDict[key]['calls']['Strike'].to_numpy().astype(float)
-            if val == self.Values.Both or val == "Both":
-                yCalls = np.asarray([v.replace(",", "") for v in self.BigDict[key]['calls']['Volume']], dtype=np.int) \
-                    + np.asarray([v.replace(",", "") for v in self.BigDict[key]['calls']['OpenInt']], dtype=np.int)
-            else:
-                yCalls = np.asarray([v.replace(",", "") for v in self.BigDict[key]['calls'][val]], dtype=np.int)
-
-            for i in range(len(x)):
-                allCalls[x[i]] = allCalls.get(x[i], 0) + yCalls[i]
-                allOptions[x[i]] = allOptions.get(x[i], 0) + yCalls[i]
-
-            x = self.BigDict[key]['puts']['Strike'].to_numpy().astype(float)
-            if val == self.Values.Both or val == "Both":
-                yPuts = np.asarray([v.replace(",", "") for v in self.BigDict[key]['puts']['Volume']], dtype=np.int) \
-                    + np.asarray([v.replace(",", "") for v in self.BigDict[key]['puts']['OpenInt']], dtype=np.int)
-            else:
-                yPuts = np.asarray([v.replace(",", "") for v in self.BigDict[key]['puts'][val]], dtype=np.int)
-
-            for i in range(len(x)):
-                allPuts[x[i]] = allPuts.get(x[i], 0) + yPuts[i]
-                allOptions[x[i]] = allOptions.get(x[i], 0) + yPuts[i]
-
-        self.StatsPlot(val=val, stats=True, plot=True, start_date=start_date, end_date=end_date, allOptions=allOptions, allCalls=allCalls, allPuts=allPuts)
+        optsDF = self.GetOptsDF(val=val, dates=dates)

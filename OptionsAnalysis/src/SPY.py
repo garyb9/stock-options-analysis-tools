@@ -8,7 +8,7 @@ Opts.BuildFromWeb('SPY')
 
 for date in Opts.GetExpirationDates():
     Opts.PlotHistByDate(date, 'Both')
-
+#Opts.PlotHist('Both')
 """
 Opts.PrintExpirationDates()
 expDates = Opts.GetExpirationDates()
