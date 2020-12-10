@@ -9,6 +9,7 @@ Opts.BuildFromWeb('PLTR')
 for date in Opts.GetExpirationDates():
     Opts.PlotHistByDate(date, 'Both')
 
+Opts.PlotTimelineWithErrors()
 """
 Opts.PrintExpirationDates()
 expDates = Opts.GetExpirationDates()

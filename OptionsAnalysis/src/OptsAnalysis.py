@@ -3,16 +3,20 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 import locale
 import enum
 import requests
 from bs4 import BeautifulSoup
 import utils
 from threading import Thread, Lock
+import datetime
+
 
 class OptsAnalysis:
     """A :class:`OptsAnalysis` object.
     """
+
     class Values(enum.Enum):
         Both = 0
         Volume = 1
@@ -117,8 +121,9 @@ class OptsAnalysis:
             raise Exception("Response Error - " + resp.reason)
         soup = BeautifulSoup(resp.content, 'html.parser')
         for dateCode in soup.find_all("option"):
-            dateCodes.append([dateCode.attrs['value'], dateCode.text])
-            self.Dates.append(dateCode.text)
+            date = datetime.datetime.strptime(dateCode.text, '%B %d, %Y').strftime('%d/%m/%Y')
+            dateCodes.append([dateCode.attrs['value'], date])
+            self.Dates.append(date)
         print("Done")
         return dateCodes
 
@@ -206,9 +211,9 @@ class OptsAnalysis:
                 print("End Date given should be equal or before Start Date")
                 return
             elif start == end:
-                dates = self.Dates[start:start+1]
+                dates = self.Dates[start:start + 1]
             else:
-                dates = self.Dates[start:end+1]
+                dates = self.Dates[start:end + 1]
 
         return dates if dates else []
 
@@ -251,10 +256,13 @@ class OptsAnalysis:
         for key in dates:
             xCalls = np.asarray(self.BigDict[key]['calls']['Strike'], dtype=np.float)
             if val == self.Values.Both or val == "Both":
-                yCalls = np.asarray([v.replace(",", "").replace("-", "0") for v in self.BigDict[key]['calls']['Volume']], dtype=np.int) \
-                         + np.asarray([v.replace(",", "").replace("-", "0") for v in self.BigDict[key]['calls']['OpenInt']], dtype=np.int)
+                yCalls = np.asarray(
+                    [v.replace(",", "").replace("-", "0") for v in self.BigDict[key]['calls']['Volume']], dtype=np.int) \
+                         + np.asarray(
+                    [v.replace(",", "").replace("-", "0") for v in self.BigDict[key]['calls']['OpenInt']], dtype=np.int)
             else:
-                yCalls = np.asarray([v.replace(",", "").replace("-", "0") for v in self.BigDict[key]['calls'][val]], dtype=np.int)
+                yCalls = np.asarray([v.replace(",", "").replace("-", "0") for v in self.BigDict[key]['calls'][val]],
+                                    dtype=np.int)
 
             for idx, strike in enumerate(xCalls):
                 if strike in df.index:
@@ -264,10 +272,13 @@ class OptsAnalysis:
 
             xPuts = np.asarray(self.BigDict[key]['puts']['Strike'], dtype=np.float)
             if val == self.Values.Both or val == "Both":
-                yPuts = np.asarray([v.replace(",", "").replace("-", "0") for v in self.BigDict[key]['puts']['Volume']], dtype=np.int) \
-                        + np.asarray([v.replace(",", "").replace("-", "0") for v in self.BigDict[key]['puts']['OpenInt']], dtype=np.int)
+                yPuts = np.asarray([v.replace(",", "").replace("-", "0") for v in self.BigDict[key]['puts']['Volume']],
+                                   dtype=np.int) \
+                        + np.asarray(
+                    [v.replace(",", "").replace("-", "0") for v in self.BigDict[key]['puts']['OpenInt']], dtype=np.int)
             else:
-                yPuts = np.asarray([v.replace(",", "").replace("-", "0") for v in self.BigDict[key]['puts'][val]], dtype=np.int)
+                yPuts = np.asarray([v.replace(",", "").replace("-", "0") for v in self.BigDict[key]['puts'][val]],
+                                   dtype=np.int)
 
             for idx, strike in enumerate(xPuts):
                 if strike in df.index:
@@ -314,13 +325,13 @@ class OptsAnalysis:
         std = np.sqrt(std)
         """
         meanCalls = np.average(optsDF.index, weights=optsDF['calls'])
-        stdCalls = np.sqrt(np.average((optsDF.index - meanCalls)**2, weights=optsDF['calls']))
+        stdCalls = np.sqrt(np.average((optsDF.index - meanCalls) ** 2, weights=optsDF['calls']))
 
         meanPuts = np.average(optsDF.index, weights=optsDF['puts'])
-        stdPuts = np.sqrt(np.average((optsDF.index - meanPuts)**2, weights=optsDF['puts']))
+        stdPuts = np.sqrt(np.average((optsDF.index - meanPuts) ** 2, weights=optsDF['puts']))
 
         meanAll = np.average(optsDF.index, weights=optsDF['all'])
-        stdAll = np.sqrt(np.average((optsDF.index - meanAll)**2, weights=optsDF['all']))
+        stdAll = np.sqrt(np.average((optsDF.index - meanAll) ** 2, weights=optsDF['all']))
 
         perCalls = str(round(100 * float(sumCalls) / float(sumOverall), 2)) + '%'
         perPuts = str(round(100 * float(sumPuts) / float(sumOverall), 2)) + '%'
@@ -372,8 +383,10 @@ class OptsAnalysis:
             # utils.print_time(startTimer)
 
         if plot:
-            plt.bar(optsDF.index, optsDF['calls'], alpha=0.5, width=1.0, color='blue', label=printCallsStr.replace("\t", " ").replace(" |", ","))
-            plt.bar(optsDF.index, optsDF['puts'], alpha=0.5, width=1.0, color='red', label=printPutsStr.replace("\t", " ").replace(" |", ","))
+            plt.bar(optsDF.index, optsDF['calls'], alpha=0.5, width=1.0, color='blue',
+                    label=printCallsStr.replace("\t", " ").replace(" |", ","))
+            plt.bar(optsDF.index, optsDF['puts'], alpha=0.5, width=1.0, color='red',
+                    label=printPutsStr.replace("\t", " ").replace(" |", ","))
             plt.plot([], [], color='black', label=printAllStr.replace("\t", " ").replace(" |", ","))
             plt.title(self.Ticker + ' Options ' + self.GetValuesString(val) + ", " + printExpDatesStr)
             plt.xlabel('Strike')
@@ -396,4 +409,106 @@ class OptsAnalysis:
     def PlotTimelineWithErrors(self, val=Values.Both, start_date=None, end_date=None):
         dates = self.GetDatesStartEnd(start_date=start_date, end_date=end_date)
 
-        optsDF = self.GetOptsDF(val=val, dates=dates)
+        df = pd.DataFrame(columns=['calls', 'callsErr', 'perCalls', 'puts', 'putsErr', 'perPuts', 'all', 'allErr'])
+        for key in dates:
+            xCalls = np.asarray(self.BigDict[key]['calls']['Strike'], dtype=np.float)
+            if val == self.Values.Both or val == "Both":
+                yCalls = np.asarray(
+                    [v.replace(",", "").replace("-", "0") for v in self.BigDict[key]['calls']['Volume']], dtype=np.int) \
+                         + np.asarray(
+                    [v.replace(",", "").replace("-", "0") for v in self.BigDict[key]['calls']['OpenInt']], dtype=np.int)
+            else:
+                yCalls = np.asarray([v.replace(",", "").replace("-", "0") for v in self.BigDict[key]['calls'][val]],
+                                    dtype=np.int)
+
+            meanCalls = np.average(xCalls, weights=yCalls)
+            stdCalls = np.sqrt(np.average((xCalls - meanCalls) ** 2, weights=yCalls))
+
+            xPuts = np.asarray(self.BigDict[key]['puts']['Strike'], dtype=np.float)
+            if val == self.Values.Both or val == "Both":
+                yPuts = np.asarray([v.replace(",", "").replace("-", "0") for v in self.BigDict[key]['puts']['Volume']],
+                                   dtype=np.int) \
+                        + np.asarray(
+                    [v.replace(",", "").replace("-", "0") for v in self.BigDict[key]['puts']['OpenInt']], dtype=np.int)
+            else:
+                yPuts = np.asarray([v.replace(",", "").replace("-", "0") for v in self.BigDict[key]['puts'][val]],
+                                   dtype=np.int)
+
+            meanPuts = np.average(xPuts, weights=yPuts)
+            stdPuts = np.sqrt(np.average((xPuts - meanPuts) ** 2, weights=yPuts))
+
+            dfAll = pd.DataFrame(columns=['all'])
+            for idx, strike in enumerate(xCalls):
+                if strike in dfAll.index:
+                    dfAll.loc[strike] += yCalls[idx]
+                else:
+                    dfAll.loc[strike] = yCalls[idx]
+
+            for idx, strike in enumerate(xPuts):
+                if strike in dfAll.index:
+                    dfAll.loc[strike] += yPuts[idx]
+                else:
+                    dfAll.loc[strike] = yPuts[idx]
+
+            meanAll = np.average(dfAll.index, weights=dfAll['all'])
+            stdAll = np.sqrt(np.average((dfAll.index - meanAll) ** 2, weights=dfAll['all']))
+            perCalls = round(100 * float(np.sum(yCalls)) / float(dfAll['all'].sum()), 2)
+            perPuts = round(100 * float(np.sum(yPuts)) / float(dfAll['all'].sum()), 2)
+
+            df.loc[key] = [meanCalls, stdCalls, perCalls, meanPuts, stdPuts, perPuts, meanAll, stdAll]
+
+        # df = df.sort_index()
+        fig, ax = plt.subplots()
+
+        # Calls
+        ax.errorbar(df.index, df['calls'], yerr=df['callsErr'], alpha=0.25, color='blue', ecolor='blue',
+                    linestyle=':',
+                    capsize=5,
+                    elinewidth=3,
+                    markeredgewidth=3,
+                    label='Calls')
+
+        for x, y, z in zip(df.index, df['calls'], df['perCalls']):
+            fy = "{:.2f}".format(y)
+            per = str(z) + '%'
+            ax.annotate(fy+', '+per, (x, y), textcoords="offset points", xytext=(0, 10),
+                        ha='right', va='top', color='navy')
+
+        # Puts
+        ax.errorbar(df.index, df['puts'], yerr=df['putsErr'], alpha=0.25, color='red', ecolor='red',
+                    linestyle=':',
+                    capsize=5,
+                    elinewidth=3,
+                    markeredgewidth=3,
+                    label='Puts')
+
+        for x, y, z in zip(df.index, df['puts'], df['perCalls']):
+            fy = "{:.2f}".format(y)
+            per = str(z) + '%'
+            ax.annotate(fy+', '+per, (x, y), textcoords="offset points", xytext=(0, 10),
+                        ha='left', va='top', color='firebrick')
+
+        # All
+        ax.errorbar(df.index, df['all'], yerr=df['allErr'], alpha=0.5, color='black', ecolor='black',
+                    linestyle='-',
+                    capsize=5,
+                    elinewidth=3,
+                    markeredgewidth=3,
+                    label='All Options')
+
+        for x, y in zip(df.index, df['all']):
+            ax.annotate("{:.2f}".format(y), (x, y), textcoords="offset points", xytext=(0, 10),
+                        ha='center', va='bottom', weight='bold')
+
+        if dates[0] == self.Dates[0] and dates[-1] == self.Dates[-1]:
+            printExpDatesStr = "All Expiration Dates"
+        elif len(dates) == 1:
+            printExpDatesStr = "Expiring at " + dates[0]
+        else:
+            printExpDatesStr = "Expiring From " + dates[0] + " Up To " + dates[-1]
+
+        plt.title(self.Ticker + " Options Mean and STD spreads, " + printExpDatesStr)
+        plt.xlabel('Expiration Dates')
+        plt.ylabel('Mean and STD Count')
+        plt.legend(loc='upper left')
+        plt.show()
