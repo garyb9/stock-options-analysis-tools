@@ -472,7 +472,7 @@ class OptsAnalysis:
             fy = "{:.2f}".format(y)
             per = str(z) + '%'
             ax.annotate(fy+', '+per, (x, y), textcoords="offset points", xytext=(0, 10),
-                        ha='right', va='top', color='navy')
+                        ha='center', va='top', color='navy')
 
         # Puts
         ax.errorbar(df.index, df['puts'], yerr=df['putsErr'], alpha=0.25, color='red', ecolor='red',
@@ -486,7 +486,7 @@ class OptsAnalysis:
             fy = "{:.2f}".format(y)
             per = str(z) + '%'
             ax.annotate(fy+', '+per, (x, y), textcoords="offset points", xytext=(0, 10),
-                        ha='left', va='top', color='firebrick')
+                        ha='center', va='top', color='firebrick')
 
         # All
         ax.errorbar(df.index, df['all'], yerr=df['allErr'], alpha=0.5, color='black', ecolor='black',
