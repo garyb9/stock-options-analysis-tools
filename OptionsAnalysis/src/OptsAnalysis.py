@@ -472,7 +472,7 @@ class OptsAnalysis:
             fy = "{:.2f}".format(y)
             per = str(z) + '%'
             ax.annotate(fy+', '+per, (x, y), textcoords="offset points", xytext=(0, 10),
-                        ha='center', va='top', color='navy')
+                        ha='right', va='top', color='navy')
 
         # Puts
         ax.errorbar(df.index, df['puts'], yerr=df['putsErr'], alpha=0.25, color='red', ecolor='red',
@@ -482,11 +482,11 @@ class OptsAnalysis:
                     markeredgewidth=3,
                     label='Puts')
 
-        for x, y, z in zip(df.index, df['puts'], df['perCalls']):
+        for x, y, z in zip(df.index, df['puts'], df['perPuts']):
             fy = "{:.2f}".format(y)
             per = str(z) + '%'
             ax.annotate(fy+', '+per, (x, y), textcoords="offset points", xytext=(0, 10),
-                        ha='center', va='top', color='firebrick')
+                        ha='left', va='top', color='firebrick')
 
         # All
         ax.errorbar(df.index, df['all'], yerr=df['allErr'], alpha=0.5, color='black', ecolor='black',
@@ -499,6 +499,8 @@ class OptsAnalysis:
         for x, y in zip(df.index, df['all']):
             ax.annotate("{:.2f}".format(y), (x, y), textcoords="offset points", xytext=(0, 10),
                         ha='center', va='bottom', weight='bold')
+
+        ax.grid(b=True, linestyle='--')
 
         if dates[0] == self.Dates[0] and dates[-1] == self.Dates[-1]:
             printExpDatesStr = "All Expiration Dates"
